@@ -8,11 +8,11 @@ macx {
 
 equals(QT_MAJOR_VERSION, 4){
     LIBS += -lqmfclient
-    target.path += $$QMF_INSTALL_ROOT/tests
+    target.path += /opt/tests/qmf
 }
 equals(QT_MAJOR_VERSION, 5){
     LIBS += -lqmfclient5
-    target.path += $$QMF_INSTALL_ROOT/tests5
+    target.path += /opt/tests/qmf-qt5
 }
 
 QMFPATH=../../src/libraries/qmfclient

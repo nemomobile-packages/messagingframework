@@ -4,9 +4,9 @@ CONFIG += qmfmessageserver qmfclient
 QT += testlib
 TARGET = tst_messageserver
 
-equals(QT_MAJOR_VERSION, 4): target.path += $$QMF_INSTALL_ROOT/tests
+equals(QT_MAJOR_VERSION, 4): target.path += /opt/tests/qmf
 equals(QT_MAJOR_VERSION, 5){
-    target.path += $$QMF_INSTALL_ROOT/tests5
+    target.path += /opt/tests/qmf-qt5
     QT += widgets
 }
 
