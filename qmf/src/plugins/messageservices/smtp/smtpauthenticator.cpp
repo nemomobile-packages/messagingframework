@@ -44,7 +44,7 @@
 #include "smtpconfiguration.h"
 
 #include <qmailauthenticator.h>
-
+#include <qmaillog.h>
 
 namespace {
 
@@ -52,6 +52,46 @@ QMap<QMailAccountId, QList<QByteArray> > gResponses;
 
 }
 
+#ifdef USE_ACCOUNTS_QT
+QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, QList<QByteArray> &ssoLogin)
+{
+    QByteArray result(QMailAuthenticator::getAuthentication(svcCfg, capabilities));
+    if (!result.isEmpty())
+        return result.prepend("AUTH ");
+
+#ifndef QT_NO_OPENSSL
+    SmtpConfiguration smtpCfg(svcCfg);
+    if (smtpCfg.smtpAuthentication() != SmtpConfiguration::Auth_NONE) {
+        QMailAccountId id(smtpCfg.id());
+        QByteArray username(smtpCfg.smtpUsername().toLatin1());
+        QByteArray pass;
+        if (ssoLogin.isEmpty()) {
+            pass = smtpCfg.smtpPassword().toLatin1();
+            qMailLog(SMTP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
+                           << ", using password from accounts configuration";
+        } else {
+            QList<QByteArray> responses = ssoLogin;
+            QByteArray res = responses.takeFirst();
+            gResponses[id] = responses;
+            return res;
+        }
+
+        if (smtpCfg.smtpAuthentication() == SmtpConfiguration::Auth_LOGIN) {
+            result = QByteArray("LOGIN");
+            gResponses[id] = (QList<QByteArray>() << username << pass);
+        } else if (smtpCfg.smtpAuthentication() == SmtpConfiguration::Auth_PLAIN) {
+            result = QByteArray("PLAIN");
+            gResponses[id] = (QList<QByteArray>() << QByteArray(username + '\0' + username + '\0' + pass));
+        }
+    }
+#endif
+
+    if (!result.isEmpty()) {
+        result.prepend("AUTH ");
+    }
+    return result;
+}
+#else
 QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
     QByteArray result(QMailAuthenticator::getAuthentication(svcCfg, capabilities));
@@ -80,6 +120,7 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
     }
     return result;
 }
+#endif
 
 QByteArray SmtpAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
@@ -98,4 +139,3 @@ QByteArray SmtpAuthenticator::getResponse(const QMailAccountConfiguration::Servi
 
     return result;
 }
-

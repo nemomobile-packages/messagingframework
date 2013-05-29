@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2013 Jolla Ltd.
+** Contact: Valério Valério <valerio.valerio@jollamobile.com>
 **
 ** This file is part of the Qt Messaging Framework.
 **
@@ -39,25 +39,80 @@
 **
 ****************************************************************************/
 
-#ifndef POPAUTHENTICATOR_H
-#define POPAUTHENTICATOR_H
+#include "ssoauthplugin.h"
 
-#include <qmailaccountconfiguration.h>
+#include <QMap>
+#include <QDebug>
+#include <qmailpluginmanager.h>
 
-#include <QByteArray>
-#include <QStringList>
+#define PLUGIN_KEY "ssoauth"
 
-class PopAuthenticator
+typedef QMap<QString, SSOAuthService*> PluginMap;
+
+// Load all the auth plugins into a map for quicker reference
+static PluginMap initMap(QMailPluginManager& manager)
 {
-public:
-    static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#ifdef USE_ACCOUNTS_QT
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
-#else
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#endif
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
-};
+    PluginMap map;
 
-#endif
+    foreach (const QString &item, manager.list()) {
+        QObject *instance = manager.instance(item);
+        if (SSOAuthService* iface = qobject_cast<SSOAuthService*>(instance))
+                map.insert(iface->key(), iface);
+    }
+    return map;
+}
+
+// Return a reference to a map containing all loaded plugin objects
+static PluginMap& pluginMap()
+{
+    static QMailPluginManager pluginManager(PLUGIN_KEY);
+    static PluginMap map(initMap(pluginManager));
+
+    return map;
+}
+
+// Return the auth plugin object matching the specified ID
+static SSOAuthService* mapping(const QString& key)
+{
+    PluginMap::ConstIterator it;
+    if ((it = pluginMap().find(key)) != pluginMap().end())
+        return it.value();
+
+    qWarning() << "Failed attempt to map plugin: " << key;
+    return 0;
+}
+
+SSOAuthService::SSOAuthService(QObject *parent)
+    : QObject(parent)
+{
+}
+
+SSOAuthService::~SSOAuthService()
+{
+}
+
+/*!
+    Returns a list of the keys of the installed plugins.
+ */
+QStringList SSOAuthFactory::keys()
+{
+    QStringList in;
+
+    foreach (PluginMap::mapped_type plugin, pluginMap())
+        in << plugin->key();
+
+    return in;
+}
+
+/*!
+    Creates a plugin object of the class identified by \a key.
+*/
+SSOAuthService* SSOAuthFactory::createService(const QString& key)
+{
+    if (SSOAuthService* plugin = mapping(key))
+        return plugin->createService();
+
+    return 0;
+}
+
 

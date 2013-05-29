@@ -58,6 +58,11 @@
 #include <QCache>
 #include <QTimer>
 
+#ifdef USE_ACCOUNTS_QT
+#include <Accounts/account.h>
+#include "ssoaccountmanager.h"
+#endif
+
 //#define QMAILSTORE_LOG_SQL //define to enable SQL query logging
 //#define QMAILSTORE_USE_RTTI //define if RTTI is available to assist debugging
 
@@ -247,6 +252,11 @@ public:
     static ValueType extractValue(const QVariant& var, const ValueType &defaultValue = ValueType());
 
     enum AttemptResult { Success = 0, Failure, DatabaseFailure };
+
+#ifdef USE_ACCOUNTS_QT
+    QMailAccountIdList searchSSOAccounts(const QMailAccountKey& key, const QMailAccountSortKey& sortKey = QMailAccountSortKey()) const;
+#endif
+
 public slots:
     void unloadDatabase();
     
@@ -340,8 +350,11 @@ private:
     QSqlQuery batchQuery(const QString& statement, const QVariantList& bindValues, const QList<Key>& keys, const QString& descriptor);
 
     bool idValueExists(quint64 id, const QString& table);
-
+#ifdef USE_ACCOUNTS_QT
+    bool idExists(const QMailAccountId& id);
+#else
     bool idExists(const QMailAccountId& id, const QString& table = QString());
+#endif
     bool idExists(const QMailFolderId& id, const QString& table = QString());
     bool idExists(const QMailMessageId& id, const QString& table = QString());
 
@@ -416,6 +429,12 @@ private:
     quint64 threadId(const QMailMessageId &id);
     AttemptResult updateLatestInConversation(quint64 threadId, QMailMessageIdList *messagesUpdated, quint64 *updatedTo = 0);
     AttemptResult updateLatestInConversation(const QSet<quint64> &threadIds, QMailMessageIdList *messagesUpdated);
+
+#ifdef USE_ACCOUNTS_QT
+    AttemptResult addAccountCustomFields(QSharedPointer<Accounts::Account>& ssoAccount, const QMap<QString, QString> &fields);
+    AttemptResult updateAccountCustomFields(QSharedPointer<Accounts::Account>& ssoAccount, const QMap<QString, QString> &fields);
+    AttemptResult accountCustomFields(QSharedPointer<Accounts::Account>& ssoAccount, QMap<QString, QString>* fields);
+#endif
 
     AttemptResult addCustomFields(quint64 id, const QMap<QString, QString> &fields, const QString &tableName);
     AttemptResult updateCustomFields(quint64 id, const QMap<QString, QString> &fields, const QString &tableName);
@@ -714,7 +733,11 @@ private:
 
     AttemptResult registerSubject(const QString &baseSubject, quint64 messageId, const QMailMessageId &predecessorId, bool missingAncestor);
 
+#ifdef USE_ACCOUNTS_QT
+    QMailAccount extractAccount(const QSharedPointer<Accounts::Account>& ssoAccount);
+#else
     QMailAccount extractAccount(const QSqlRecord& r);
+#endif
     QMailThread extractThread(const QSqlRecord &r);
     QMailFolder extractFolder(const QSqlRecord& r);
     QMailMessageMetaData extractMessageMetaData(const QSqlRecord& r, QMailMessageKey::Properties recordProperties, const QMailMessageKey::Properties& properties = allMessageProperties());
@@ -753,9 +776,28 @@ private:
 
     static void extractMessageMetaData(const QSqlRecord& r, QMailMessageKey::Properties recordProperties, const QMailMessageKey::Properties& properties, QMailMessageMetaData* metaData);
 
+#ifdef USE_ACCOUNTS_QT
+    bool accountValid(Accounts::AccountId id) const;
+
+        virtual void disconnectIpc();
+        virtual void reconnectIpc();
+
+    private Q_SLOTS:
+
+        void accountCreated(Accounts::AccountId id);
+        void accountRemoved(Accounts::AccountId id);
+        void accountUpdated(Accounts::AccountId id);
+        void onAccountRemovedFinished(const QMailAccountId& id);
+#endif
+
 private:
     Q_DECLARE_PUBLIC (QMailStore)
     QMailStore * const q_ptr;
+
+#ifdef USE_ACCOUNTS_QT
+    SSOAccountManager manager;
+    QSharedPointer<Accounts::Account> getEmailAccount(const Accounts::AccountId id);
+#endif
 
     template <typename T, typename KeyType> 
     class Cache
@@ -811,6 +853,9 @@ private:
     static ProcessMutex *contentMutex;
 
     int globalLocks;
+#ifdef USE_ACCOUNTS_QT
+    QDateTime ipcLastDbUpdated;
+#endif
 };
 
 template <typename ValueType>

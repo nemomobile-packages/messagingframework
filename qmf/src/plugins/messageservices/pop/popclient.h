@@ -54,6 +54,10 @@
 #include <qmailtransport.h>
 #include <qmailmessagebuffer.h>
 
+#ifdef USE_ACCOUNTS_QT
+#include <ssosessionmanager.h>
+#endif
+
 class LongStream;
 class QMailTransport;
 class QMailAccount;
@@ -90,6 +94,10 @@ public:
     void messageFlushed(QMailMessage &message, bool isComplete);
     void removeAllFromBuffer(QMailMessage *message);
 
+#ifdef USE_ACCOUNTS_QT
+    void removeSsoIdentity(const QMailAccountId &accountId);
+#endif
+
 signals:
     void errorOccurred(int, const QString &);
     void errorOccurred(QMailServiceAction::Status::ErrorCode, const QString &);
@@ -107,10 +115,19 @@ protected slots:
     void connected(QMailTransport::EncryptType encryptType);
     void transportError(int, QString msg);
 
+#ifdef USE_ACCOUNTS_QT
+    void onAccountsUpdated(const QMailAccountIdList& list);
+    void onSsoSessionError(const QString &error);
+    void onSsoSessionResponse(const QList<QByteArray> &ssoCredentials);
+#endif
+
     void connectionInactive();
     void incomingData();
 
 private:
+#ifdef USE_ACCOUNTS_QT
+    void ssoProcessLogin();
+#endif
     void deactivateConnection();
     int nextMsgServerPos();
     int msgPosFromUidl(QString uidl);
@@ -189,6 +206,14 @@ private:
     QVector<QMailMessageBufferFlushCallback*> callbacks;
     bool testing;
     bool pendingDeletes;
+
+#ifdef USE_ACCOUNTS_QT
+    SSOSessionManager* ssoSessionManager;
+    bool loginFailed;
+    bool sendLogin;
+    bool accountUpdated;
+    QList<QByteArray> ssoLogin;
+#endif
 };
 
 #endif

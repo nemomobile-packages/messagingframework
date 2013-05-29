@@ -55,6 +55,10 @@
 #include <qmailmessageclassifier.h>
 #include <qmailmessageserver.h>
 
+#ifdef USE_ACCOUNTS_QT
+#include <ssosessionmanager.h>
+#endif
+
 
 class ImapStrategy;
 class ImapStrategyContext;
@@ -70,6 +74,10 @@ public:
     ~ImapClient();
 
     void setAccount(const QMailAccountId& accountId);
+#ifdef USE_ACCOUNTS_QT
+    void removeSsoIdentity(const QMailAccountId& accountId);
+    void closeIdleConnections();
+#endif
     QMailAccountId account() const;
     void requestRapidClose() { _requestRapidClose = true; } // Close connection ASAP, unless interactive checking occurred recently
 
@@ -146,12 +154,21 @@ protected slots:
     void checkCommandResponse(const ImapCommand, const OperationStatus);
     void commandTransition(const ImapCommand, const OperationStatus);
     void transportStatus(const QString& status);
-    void idleOpenRequested();
+    void idleOpenRequested(IdleProtocol*);
     void messageBufferFlushed();
+
+#ifdef USE_ACCOUNTS_QT
+    void onAccountsUpdated(const QMailAccountIdList& list);
+    void onSsoSessionError(const QString &error);
+    void onSsoSessionResponse(const QList<QByteArray> &ssoLogin);
+#endif
 
 private:
     friend class ImapStrategyContextBase;
 
+#ifdef USE_ACCOUNTS_QT
+    void ssoProcessLogin();
+#endif
     void deactivateConnection();
     void retrieveOperationCompleted();
 
@@ -185,6 +202,15 @@ private:
     int _pushConnectionsReserved;
 
     QMap<QMailMessageId,QString> detachedTempFiles;
+
+#ifdef USE_ACCOUNTS_QT
+    SSOSessionManager* _ssoSessionManager;
+    bool _loginFailed;
+    bool _sendLogin;
+    bool _recreateIdentity;
+    bool _accountUpdated;
+    QByteArray _ssoLogin;
+#endif
 };
 
 #endif

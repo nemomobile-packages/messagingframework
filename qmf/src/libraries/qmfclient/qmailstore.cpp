@@ -546,7 +546,6 @@ bool QMailStore::updateAccount(QMailAccount* account, QMailAccountConfiguration 
     d->setLastError(NoError);
     if (!d->updateAccount(account, config, &updatedAccounts))
         return false;
-
     emitAccountNotification(Updated, updatedAccounts);
     return true;
 }
@@ -564,7 +563,6 @@ bool QMailStore::updateAccountConfiguration(QMailAccountConfiguration *config)
     d->setLastError(NoError);
     if (!d->updateAccountConfiguration(config, &updatedAccounts))
         return false;
-
     emitAccountNotification(Updated, updatedAccounts);
     return true;
 }

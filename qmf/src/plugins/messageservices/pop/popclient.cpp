@@ -55,7 +55,6 @@
 #include <unistd.h>
 #endif
 
-
 class MessageFlushedWrapper : public QMailMessageBufferFlushCallback
 {
     PopClient *context;
@@ -74,6 +73,29 @@ public:
     }
 };
 
+#ifdef USE_ACCOUNTS_QT
+PopClient::PopClient(QObject* parent)
+    : QObject(parent),
+      selected(false),
+      deleting(false),
+      headerLimit(0),
+      additional(0),
+      partialContent(false),
+      dataStream(new LongStream),
+      transport(0),
+      testing(false),
+      pendingDeletes(false),
+      ssoSessionManager(0),
+      loginFailed(false),
+      sendLogin(false),
+      accountUpdated(false)
+{
+    inactiveTimer.setSingleShot(true);
+    connect(&inactiveTimer, SIGNAL(timeout()), this, SLOT(connectionInactive()));
+    connect(QMailMessageBuffer::instance(), SIGNAL(flushed()), this, SLOT(messageBufferFlushed()));
+    connect(QMailStore::instance(), SIGNAL(accountsUpdated(QMailAccountIdList)), this, SLOT(onAccountsUpdated(QMailAccountIdList)));
+}
+#else
 PopClient::PopClient(QObject* parent)
     : QObject(parent),
       selected(false),
@@ -90,6 +112,7 @@ PopClient::PopClient(QObject* parent)
     connect(&inactiveTimer, SIGNAL(timeout()), this, SLOT(connectionInactive()));
     connect(QMailMessageBuffer::instance(), SIGNAL(flushed()), this, SLOT(messageBufferFlushed()));
 }
+#endif
 
 PopClient::~PopClient()
 {
@@ -99,6 +122,10 @@ PopClient::~PopClient()
 
     delete dataStream;
     delete transport;
+#ifdef USE_ACCOUNTS_QT
+    if (ssoSessionManager)
+        ssoSessionManager->deleteSsoIdentity();
+#endif
 }
 
 void PopClient::messageBufferFlushed()
@@ -165,6 +192,7 @@ void PopClient::newConnection()
     testing = false;
     pendingDeletes = false;
     lastStatusTimer.start();
+
     if (transport && transport->connected()) {
         if (selected) {
             // Re-use the existing connection
@@ -219,6 +247,23 @@ void PopClient::setAccount(const QMailAccountId &id)
     }
 
     config = QMailAccountConfiguration(id);
+#ifdef USE_ACCOUNTS_QT
+    if (!ssoSessionManager) {
+        PopConfiguration popCfg(config);
+        ssoSessionManager = new SSOSessionManager(this);
+        ssoSessionManager->createSsoIdentity(id, "pop3", popCfg.mailEncryption());
+        if (ssoSessionManager->createSsoIdentity(id, "pop3", popCfg.mailEncryption())) {
+            ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionResponse(QList<QByteArray>))
+                            ,this, SLOT(onSsoSessionResponse(QList<QByteArray>))));
+            ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionError(QString)),this, SLOT(onSsoSessionError(QString))));
+            qMailLog(POP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
+        } else {
+            delete ssoSessionManager;
+            qMailLog(POP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
+                          << ", accounts configuration will be used";
+        }
+    }
+#endif
 }
 
 QMailAccountId PopClient::accountId() const
@@ -488,7 +533,16 @@ void PopClient::processResponse(const QString &response)
     {
         if (response[0] != '+') {
             // Authentication failed
+#ifdef USE_ACCOUNTS_QT
+            if (ssoSessionManager && !loginFailed) {
+                loginFailed = true;
+                ssoProcessLogin();
+            } else {
+                operationFailed(QMailServiceAction::Status::ErrLoginFailed, "");
+            }
+#else
             operationFailed(QMailServiceAction::Status::ErrLoginFailed, "");
+#endif
         } else {
             if ((response.length() > 2) && (response[1] == ' ')) {
                 // This is a continuation containing a challenge string (in Base64)
@@ -702,7 +756,11 @@ void PopClient::nextAction()
         emit updateStatus(tr("Logging in"));
 
         // Get the login command sequence to use
+#ifdef USE_ACCOUNTS_QT
+        authCommands = PopAuthenticator::getAuthentication(config.serviceConfiguration("pop3"), capabilities, ssoLogin);
+#else
         authCommands = PopAuthenticator::getAuthentication(config.serviceConfiguration("pop3"), capabilities);
+#endif
 
         nextStatus = Auth;
         nextCommand = authCommands.takeFirst();
@@ -1199,6 +1257,11 @@ void PopClient::checkForNewMessages()
 void PopClient::cancelTransfer(QMailServiceAction::Status::ErrorCode code, const QString &text)
 {
     operationFailed(code, text);
+#ifdef USE_ACCOUNTS_QT
+    if (ssoSessionManager) {
+        ssoSessionManager->cancel();
+    }
+#endif
 }
 
 void PopClient::retrieveOperationCompleted()
@@ -1296,3 +1359,63 @@ void PopClient::removeAllFromBuffer(QMailMessage *message)
         _bufferedMessages.remove(i);
     }
 }
+
+#ifdef USE_ACCOUNTS_QT
+void PopClient::removeSsoIdentity(const QMailAccountId &accountId)
+{
+    if (config.id() == accountId) {
+        if (ssoSessionManager) {
+            ssoSessionManager->removeSsoIdentity();
+            delete ssoSessionManager;
+        }
+    }
+}
+
+void PopClient::onSsoSessionResponse(const QList<QByteArray> &ssoCredentials)
+{
+    qMailLog(POP)  << "Got SSO response";
+    if(!ssoCredentials.isEmpty()) {
+        ssoLogin = ssoCredentials;
+        if (sendLogin) {
+            sendLogin = false;
+            newConnection();
+        }
+    }
+}
+
+void PopClient::onSsoSessionError(const QString &error)
+{
+    loginFailed = false;
+    sendLogin = false;
+    qMailLog(POP) <<  "Got SSO error:" << error;
+    operationFailed(QMailSearchAction::Status::ErrLoginFailed, error);
+}
+
+void PopClient::ssoProcessLogin()
+{
+    if (loginFailed) {
+        if (ssoSessionManager) {
+            sendLogin = true;
+            ssoSessionManager->recreateSsoIdentity(!accountUpdated);
+        } else
+            operationFailed(QMailServiceAction::Status::ErrLoginFailed, "SSO Error: can't recreate identity.");
+    } else {
+        status = Connected;
+        nextAction();
+    }
+}
+
+void PopClient::onAccountsUpdated(const QMailAccountIdList &list)
+{
+    if (!list.contains(accountId()))
+        return;
+
+    QMailAccount acc(accountId());
+    bool isEnabled(acc.status() & QMailAccount::Enabled);
+    if (!isEnabled)
+        return;
+    accountUpdated = true;
+    setAccount(accountId());
+}
+
+#endif

@@ -181,7 +181,11 @@ public:
     /*  Valid in non-authenticated state only    */
     void sendCapability();
     void sendStartTLS();
+#ifdef USE_ACCOUNTS_QT
+    void sendLogin(const QMailAccountConfiguration &config, const QByteArray &ssoLogin);
+#else
     void sendLogin(const QMailAccountConfiguration &config);
+#endif
 
     /* Valid in authenticated state only    */
     void sendList(const QMailFolder &reference, const QString &mailbox);

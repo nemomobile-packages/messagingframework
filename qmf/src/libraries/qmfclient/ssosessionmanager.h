@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2013 Jolla Ltd.
+** Contact: Valério Valério <valerio.valerio@jollamobile.com>
 **
 ** This file is part of the Qt Messaging Framework.
 **
@@ -39,25 +39,61 @@
 **
 ****************************************************************************/
 
-#ifndef POPAUTHENTICATOR_H
-#define POPAUTHENTICATOR_H
+#ifndef SSOSESSIONMANAGER_H
+#define SSOSESSIONMANAGER_H
 
-#include <qmailaccountconfiguration.h>
+#include "ssoauthplugin.h"
+#include "qmailglobal.h"
+#include "qmailaccount.h"
+#include <QString>
+#include <qglobal.h>
 
-#include <QByteArray>
-#include <QStringList>
+// Accounts
+#include <SignOn/Identity>
+#include <SignOn/SessionData>
 
-class PopAuthenticator
+using namespace SignOn;
+
+class QMF_EXPORT SSOSessionManager : public QObject
 {
+    Q_OBJECT
 public:
-    static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#ifdef USE_ACCOUNTS_QT
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
-#else
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#endif
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
+    SSOSessionManager(QObject* parent);
+    ~SSOSessionManager();
+
+    void cancel();
+    bool createSsoIdentity(const QMailAccountId &id,
+                           const QString &serviceType, int serviceAuthentication);
+    void deleteSsoIdentity();
+    void recreateSsoIdentity(bool setUiPolicy = true);
+    void removeSsoIdentity();
+    bool waitForSso();
+
+signals:
+    void ssoSessionResponse(const QList<QByteArray> &ssoLogin);
+    void ssoSessionError(const QString &error);
+
+protected slots:
+    void ssoResponse(const SignOn::SessionData &sessionData);
+    void ssoSessionError(const SignOn::Error &code);
+
+private:
+    bool authPluginAvailable(const QString &method) const;
+    QString serviceCredentialsId(const QString &serviceType) const;
+
+    int _serviceAuthentication;
+    bool _waitForSso;
+    QByteArray _ssoLogin;
+    QString _authMethod;
+    QString _authMechanism;
+    QString _authUsername;
+    QVariantMap _authParameters;
+    QString _serviceType;
+    QString _accountProvider;
+    QStringList _availableAuthMethods;
+    SSOAuthService *_authService;
+    SignOn::Identity *_identity;
+    SignOn::AuthSession *_session;
 };
 
-#endif
-
+#endif // SSOSESSIONMANAGER_H

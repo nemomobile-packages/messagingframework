@@ -301,16 +301,23 @@ class IdleProtocol : public ImapProtocol {
     Q_OBJECT
 
 public:
+#ifdef USE_ACCOUNTS_QT
+    IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QByteArray &ssoLogin);
+#else
     IdleProtocol(ImapClient *client, const QMailFolder &folder);
+#endif
     virtual ~IdleProtocol() {}
 
     virtual void handleIdling() { _client->idling(_folder.id()); }
     virtual bool open(const ImapConfiguration& config, qint64 bufferSize = 10*1024);
+#ifdef USE_ACCOUNTS_QT
+    int idleRetryDelay() { return _idleRetryDelay; }
+#endif
 
 signals:
     void idleNewMailNotification(QMailFolderId);
     void idleFlagsChangedNotification(QMailFolderId);
-    void openRequest();
+    void openRequest(IdleProtocol*);
 
 protected slots:
     virtual void idleContinuation(ImapCommand, const QString &);
@@ -330,8 +337,39 @@ private:
     QTimer _idleTimer; // Send a DONE command every 29 minutes
 #endif
     QTimer _idleRecoveryTimer; // Check command hasn't hung
+#ifdef USE_ACCOUNTS_QT
+    int _idleRetryDelay; // Try to restablish IDLE state
+    enum IdleRetryDelay { InitialIdleRetryDelay = 30 }; //seconds
+    bool _ssoAccount;
+    QByteArray &_ssoLogin;
+#endif
 };
 
+#ifdef USE_ACCOUNTS_QT
+IdleProtocol::IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QByteArray &ssoLogin)
+    :_idleRetryDelay(InitialIdleRetryDelay),
+      _ssoAccount(ssoAccount),
+      _ssoLogin(ssoLogin)
+{
+    _client = client;
+    _folder = folder;
+    connect(this, SIGNAL(continuationRequired(ImapCommand, QString)),
+            this, SLOT(idleContinuation(ImapCommand, QString)) );
+    connect(this, SIGNAL(completed(ImapCommand, OperationStatus)),
+            this, SLOT(idleCommandTransition(ImapCommand, OperationStatus)) );
+    connect(this, SIGNAL(connectionError(int,QString)),
+            this, SLOT(idleTransportError()) );
+    connect(this, SIGNAL(connectionError(QMailServiceAction::Status::ErrorCode,QString)),
+            this, SLOT(idleTransportError()) );
+
+    _idleTimer.setSingleShot(true);
+    connect(&_idleTimer, SIGNAL(timeout()),
+            this, SLOT(idleTimeOut()));
+    _idleRecoveryTimer.setSingleShot(true);
+    connect(&_idleRecoveryTimer, SIGNAL(timeout()),
+            this, SLOT(idleErrorRecovery()));
+}
+#else
 IdleProtocol::IdleProtocol(ImapClient *client, const QMailFolder &folder)
 {
     _client = client;
@@ -352,6 +390,7 @@ IdleProtocol::IdleProtocol(ImapClient *client, const QMailFolder &folder)
     connect(&_idleRecoveryTimer, SIGNAL(timeout()),
             this, SLOT(idleErrorRecovery()));
 }
+#endif
 
 bool IdleProtocol::open(const ImapConfiguration& config, qint64 bufferSize)
 {
@@ -427,14 +466,28 @@ void IdleProtocol::idleCommandTransition(const ImapCommand command, const Operat
                     break;
                 }
             }
-
+#ifdef USE_ACCOUNTS_QT
+            // We are now connected
+            if (_ssoAccount)
+                sendLogin(config, _ssoLogin);
+            else
+                sendLogin(config, "");
+#else
             // We are now connected
             sendLogin(config);
+#endif
             return;
         }
         case IMAP_StartTLS:
         {
+#ifdef USE_ACCOUNTS_QT
+        if (_ssoAccount)
+            sendLogin(config, _ssoLogin);
+        else
+            sendLogin(config, "");
+#else
             sendLogin(config);
+#endif
             break;
         }
         case IMAP_Login: // Fall through
@@ -502,11 +555,91 @@ void IdleProtocol::idleErrorRecovery()
     const int oneHour = 60*60;
     _idleRecoveryTimer.stop();
 
-    _client->setIdleRetryDelay(qMin( oneHour, _client->idleRetryDelay()*2 ));
+#ifdef USE_ACCOUNTS_QT
+    if (connected() && _idleTimer.isActive()) {
+        qMailLog(IMAP) << objectName() << "IDLE: IMAP IDLE error recovery was successful. About to check for new mail.";
+        _idleRetryDelay = InitialIdleRetryDelay;
+        emit idleNewMailNotification(_folder.id()); // Check for new messages arriving while idle connection was down
+        emit idleFlagsChangedNotification(_folder.id());
+        return;
+    }
+    updateStatus(tr("Idle Error occurred"));
 
-    emit openRequest();
+    QTimer::singleShot(_idleRetryDelay*1000, this, SLOT(idleErrorRecovery()));
+    _idleRetryDelay = qMin( oneHour, _idleRetryDelay*2 );
+
+    emit openRequest(this);
+#else
+    _client->setIdleRetryDelay(qMin( oneHour, _client->idleRetryDelay()*2 ));
+    emit openRequest(this);
+#endif
 }
 
+#ifdef USE_ACCOUNTS_QT
+ImapClient::ImapClient(QObject* parent)
+    : QObject(parent),
+      _closeCount(0),
+      _waitingForIdle(false),
+      _idlesEstablished(false),
+      _qresyncEnabled(false),
+      _requestRapidClose(false),
+      _rapidClosing(false),
+      _idleRetryDelay(InitialIdleRetryDelay),
+      _pushConnectionsReserved(0),
+      _ssoSessionManager(0),
+      _loginFailed(false),
+      _sendLogin(false),
+      _recreateIdentity(true),
+      _accountUpdated(false)
+{
+    static int count(0);
+    ++count;
+
+    _protocol.setObjectName(QString("%1").arg(count));
+    _strategyContext = new ImapStrategyContext(this);
+    _strategyContext->setStrategy(&_strategyContext->synchronizeAccountStrategy);
+    connect(&_protocol, SIGNAL(completed(ImapCommand, OperationStatus)),
+            this, SLOT(commandCompleted(ImapCommand, OperationStatus)) );
+    connect(&_protocol, SIGNAL(mailboxListed(QString,QString)),
+            this, SLOT(mailboxListed(QString,QString)));
+    connect(&_protocol, SIGNAL(messageFetched(QMailMessage&, const QString &, bool)),
+            this, SLOT(messageFetched(QMailMessage&, const QString &, bool)) );
+    connect(&_protocol, SIGNAL(dataFetched(QString, QString, QString, int)),
+            this, SLOT(dataFetched(QString, QString, QString, int)) );
+    connect(&_protocol, SIGNAL(nonexistentUid(QString)),
+            this, SLOT(nonexistentUid(QString)) );
+    connect(&_protocol, SIGNAL(messageStored(QString)),
+            this, SLOT(messageStored(QString)) );
+    connect(&_protocol, SIGNAL(messageCopied(QString, QString)),
+            this, SLOT(messageCopied(QString, QString)) );
+    connect(&_protocol, SIGNAL(messageCreated(QMailMessageId, QString)),
+            this, SLOT(messageCreated(QMailMessageId, QString)) );
+    connect(&_protocol, SIGNAL(downloadSize(QString, int)),
+            this, SLOT(downloadSize(QString, int)) );
+    connect(&_protocol, SIGNAL(urlAuthorized(QString)),
+            this, SLOT(urlAuthorized(QString)) );
+    connect(&_protocol, SIGNAL(folderCreated(QString)),
+            this, SLOT(folderCreated(QString)));
+    connect(&_protocol, SIGNAL(folderDeleted(QMailFolder)),
+            this, SLOT(folderDeleted(QMailFolder)));
+    connect(&_protocol, SIGNAL(folderRenamed(QMailFolder, QString)),
+            this, SLOT(folderRenamed(QMailFolder, QString)));
+    connect(&_protocol, SIGNAL(updateStatus(QString)),
+            this, SLOT(transportStatus(QString)) );
+    connect(&_protocol, SIGNAL(connectionError(int,QString)),
+            this, SLOT(transportError(int,QString)) );
+    connect(&_protocol, SIGNAL(connectionError(QMailServiceAction::Status::ErrorCode,QString)),
+            this, SLOT(transportError(QMailServiceAction::Status::ErrorCode,QString)) );
+
+    _inactiveTimer.setSingleShot(true);
+    connect(&_inactiveTimer, SIGNAL(timeout()),
+            this, SLOT(connectionInactive()));
+
+    connect(QMailMessageBuffer::instance(), SIGNAL(flushed()), this, SLOT(messageBufferFlushed()));
+
+    connect (QMailStore::instance(), SIGNAL(accountsUpdated(QMailAccountIdList)), this, SLOT(onAccountsUpdated(QMailAccountIdList)));
+}
+#else
 ImapClient::ImapClient(QObject* parent)
     : QObject(parent),
       _closeCount(0),
@@ -563,6 +696,7 @@ ImapClient::ImapClient(QObject* parent)
 
     connect(QMailMessageBuffer::instance(), SIGNAL(flushed()), this, SLOT(messageBufferFlushed()));
 }
+#endif
 
 ImapClient::~ImapClient()
 {
@@ -579,6 +713,10 @@ ImapClient::~ImapClient()
         QMailMessageBuffer::instance()->removeCallback(callback);
     }
     delete _strategyContext;
+#ifdef USE_ACCOUNTS_QT
+    if (_ssoSessionManager)
+        _ssoSessionManager->deleteSsoIdentity();
+#endif
 }
 
 // Called to begin executing a strategy
@@ -652,8 +790,24 @@ void ImapClient::checkCommandResponse(ImapCommand command, OperationStatus statu
 
             case IMAP_Login:
             {
+#ifdef USE_ACCOUNTS_QT
+                // We try only once to recreate the sso identity and relogin,
+                // in order to allow user interaction if defined by the sso
+                // plugin.
+                if (!_loginFailed && _recreateIdentity) {
+                    _loginFailed = true;
+                    _sendLogin = true;
+                    ssoProcessLogin();
+                    return;
+                } else {
+                    _recreateIdentity = true;
+                    operationFailed(QMailServiceAction::Status::ErrLoginFailed, _protocol.lastError());
+                    return;
+                }
+#else
                 operationFailed(QMailServiceAction::Status::ErrLoginFailed, _protocol.lastError());
                 return;
+#endif
             }
 
             case IMAP_Full:
@@ -684,6 +838,11 @@ void ImapClient::checkCommandResponse(ImapCommand command, OperationStatus statu
         case IMAP_Unconnected:
             operationFailed(QMailServiceAction::Status::ErrNoConnection, _protocol.lastError());
             return;
+#ifdef USE_ACCOUNTS_QT
+        case IMAP_Login:
+            _loginFailed = false;
+            break;
+#endif
         default:
             break;
     }
@@ -744,7 +903,15 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
                     }
                 }
                 emit updateStatus( tr("Logging in" ) );
+#ifdef USE_ACCOUNTS_QT
+                if (_ssoSessionManager) {
+                    _sendLogin = true;
+                    ssoProcessLogin();
+                } else
+                    _protocol.sendLogin(_config, "");
+#else
                 _protocol.sendLogin(_config);
+#endif
             }
             break;
         }
@@ -752,7 +919,15 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
         case IMAP_Idle_Continuation:
         {
             emit updateStatus( tr("Logging in" ) );
+#ifdef USE_ACCOUNTS_QT
+            if (_ssoSessionManager) {
+                _sendLogin = true;
+                ssoProcessLogin();
+            } else
+                _protocol.sendLogin(_config, "");
+#else
             _protocol.sendLogin(_config);
+#endif
             break;
         }
         
@@ -788,9 +963,16 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
                 account.setStatus(QMailAccount::CanReferenceExternalData, supportsReferences);
                 imapCfg.setPushCapable(_protocol.supportsCapability("IDLE"));
                 imapCfg.setCapabilities(_protocol.capabilities());
+#ifdef USE_ACCOUNTS_QT
+                if ((!QMailStore::instance()->updateAccount(&account)) ||
+                    (!QMailStore::instance()->updateAccount(&account, &_config))) {
+                    qWarning() << "Unable to update account" << account.id() << "to set imap4 configuration";
+                }
+#else
                 if (!QMailStore::instance()->updateAccount(&account, &_config)) {
                     qWarning() << "Unable to update account" << account.id() << "to set imap4 configuration";
                 }
+#endif
             }
 
             bool compressCapable(_protocol.capabilities().contains("COMPRESS=DEFLATE", Qt::CaseInsensitive));
@@ -1482,6 +1664,24 @@ void ImapClient::setAccount(const QMailAccountId &id)
     }
 
     _config = QMailAccountConfiguration(id);
+
+#ifdef USE_ACCOUNTS_QT
+    if (!_ssoSessionManager) {
+        ImapConfiguration imapCfg(_config);
+        _ssoSessionManager = new SSOSessionManager(this);
+         if (_ssoSessionManager->createSsoIdentity(id, "imap4", imapCfg.mailAuthentication())) {
+             ENFORCE(connect(_ssoSessionManager, SIGNAL(ssoSessionResponse(QList<QByteArray>))
+                             ,this, SLOT(onSsoSessionResponse(QList<QByteArray>))));
+             ENFORCE(connect(_ssoSessionManager, SIGNAL(ssoSessionError(QString))
+                             ,this, SLOT(onSsoSessionError(QString))));
+             qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
+         } else {
+             delete _ssoSessionManager;
+             qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
+                            << ", accounts configuration will be used";
+         }
+    }
+#endif
 }
 
 QMailAccountId ImapClient::account() const
@@ -1515,6 +1715,11 @@ void ImapClient::transportStatus(const QString& status)
 void ImapClient::cancelTransfer(QMailServiceAction::Status::ErrorCode code, const QString &text)
 {
     operationFailed(code, text);
+#ifdef USE_ACCOUNTS_QT
+    if (_ssoSessionManager) {
+        _ssoSessionManager->cancel();
+    }
+#endif
 }
 
 void ImapClient::retrieveOperationCompleted()
@@ -1701,27 +1906,39 @@ void ImapClient::monitor(const QMailFolderIdList &mailboxIds)
     foreach(QMailFolderId id, mailboxIds) {
         if (!_monitored.contains(id)) {
             ++count;
+#ifdef USE_ACCOUNTS_QT
+            bool ssoAccount = _ssoSessionManager != 0;
+            IdleProtocol *protocol = new IdleProtocol(this, QMailFolder(id), ssoAccount, _ssoLogin);
+#else
             IdleProtocol *protocol = new IdleProtocol(this, QMailFolder(id));
+#endif
             protocol->setObjectName(QString("I:%1").arg(count));
             _monitored.insert(id, protocol);
             connect(protocol, SIGNAL(idleNewMailNotification(QMailFolderId)),
                     this, SIGNAL(idleNewMailNotification(QMailFolderId)));
             connect(protocol, SIGNAL(idleFlagsChangedNotification(QMailFolderId)),
                     this, SIGNAL(idleFlagsChangedNotification(QMailFolderId)));
-            connect(protocol, SIGNAL(openRequest()),
-                    this, SLOT(idleOpenRequested()));
+            connect(protocol, SIGNAL(openRequest(IdleProtocol *)),
+                    this, SLOT(idleOpenRequested(IdleProtocol *)));
             protocol->open(imapCfg);
         }
     }
 }
 
-void ImapClient::idleOpenRequested()
+void ImapClient::idleOpenRequested(IdleProtocol *idleProtocol)
 {
     if (_protocol.inUse()) { // Setting up new idle connection may be in progress
-        qMailLog(IMAP) << _protocol.objectName() 
-                       << "IDLE: IMAP IDLE error recovery detected that the primary connection is "
-                          "busy. Retrying to establish IDLE state in" 
-                       << idleRetryDelay()/2 << "seconds.";
+#ifdef USE_ACCOUNTS_QT
+        qMailLog(IMAP) << _protocol.objectName()
+               << "IDLE: IMAP IDLE error recovery detected that the primary connection is "
+                  "busy. Retrying to establish IDLE state in"
+               << idleProtocol->idleRetryDelay()/2 << "seconds.";
+#else
+        qMailLog(IMAP) << _protocol.objectName()
+               << "IDLE: IMAP IDLE error recovery detected that the primary connection is "
+                  "busy. Retrying to establish IDLE state in"
+               << idleRetryDelay()/2 << "seconds.";
+#endif
         return;
     }
     _protocol.close();
@@ -1732,7 +1949,7 @@ void ImapClient::idleOpenRequested()
         delete protocol;
     }
     _idlesEstablished = false;
-    qMailLog(IMAP) << _protocol.objectName() 
+    qMailLog(IMAP) << _protocol.objectName()
                    << "IDLE: IMAP IDLE error recovery trying to establish IDLE state now.";
     emit restartPushEmail();
 }
@@ -1761,5 +1978,123 @@ void ImapClient::removeAllFromBuffer(QMailMessage *message)
         _bufferedMessages.remove(i);
     }
 }
+
+#ifdef USE_ACCOUNTS_QT
+void ImapClient::removeSsoIdentity(const QMailAccountId &accountId)
+{
+    //removing sso Identity
+    if (_config.id() == accountId) {
+        if (_ssoSessionManager) {
+            _ssoSessionManager->removeSsoIdentity();
+            delete _ssoSessionManager;
+        }
+    }
+}
+
+void ImapClient::ssoProcessLogin()
+{
+    if (_loginFailed && _recreateIdentity) {
+        // if account was updated try to recreate
+        // identity without asking the user for new
+        // credentials
+        if (_ssoSessionManager)
+            _ssoSessionManager->recreateSsoIdentity(!_accountUpdated);
+        else
+            operationFailed(QMailServiceAction::Status::ErrLoginFailed, "SSO Error: can't recreate identity.");
+    } else {
+        if (_sendLogin && !_ssoSessionManager->waitForSso()) {
+            _sendLogin = false;
+            _protocol.sendLogin(_config, _ssoLogin);
+        }
+    }
+}
+
+void ImapClient::onSsoSessionResponse(const QList<QByteArray> &ssoLogin)
+{
+    qMailLog(IMAP)  << "Got SSO response";
+    if (!ssoLogin.isEmpty()) {
+        if (_accountUpdated && _ssoLogin != ssoLogin[0]) {
+            _accountUpdated = false;
+            _ssoLogin = ssoLogin[0];
+        } else {
+            _ssoLogin = ssoLogin[0];
+        }
+    }
+
+    if (_loginFailed) {
+        _recreateIdentity = false;
+        commandTransition(IMAP_Init, OpPending);
+        return;
+    }
+    if (_sendLogin) {
+        _protocol.sendLogin(_config, _ssoLogin);
+    }
+}
+
+void ImapClient::onSsoSessionError(const QString &error)
+{
+    // Reset vars
+    _loginFailed = false;
+    _sendLogin = false;
+    _recreateIdentity = true;
+    qMailLog(IMAP) <<  "Got SSO error:" << error;
+    operationFailed(QMailServiceAction::Status::ErrLoginFailed, error);
+}
+
+void ImapClient::onAccountsUpdated(const QMailAccountIdList &list)
+{
+    if (list.contains(_config.id())) {
+
+        ImapConfiguration imapCfg1(_config);
+        // copying here as the data is shared
+        QMailAccountConfiguration config = QMailAccountConfiguration(_config.id());
+        ImapConfiguration imapCfg2(config);
+
+        if (!imapCfg1.isValid()) {
+            qMailLog(IMAP) << Q_FUNC_INFO << "current config is invalid";
+            return;
+        }
+
+        if (!imapCfg2.isValid()) {
+            qMailLog(IMAP) << Q_FUNC_INFO << "invalid config from db";
+            return;
+        }
+
+        if (_ssoSessionManager)
+            _accountUpdated = true;
+
+        qMailLog(IMAP) << Q_FUNC_INFO << imapCfg1.mailUserName() ;
+        // compare config modified by the User
+        const bool& notEqual = (imapCfg1.mailUserName() != imapCfg2.mailUserName()) ||
+                               (imapCfg1.mailPassword() != imapCfg2.mailPassword()) ||
+                               (imapCfg1.mailServer() != imapCfg2.mailServer()) ||
+                               (imapCfg1.mailPort() != imapCfg2.mailPort()) ||
+                               (imapCfg1.mailEncryption() != imapCfg2.mailEncryption()) ||
+                               (imapCfg1.pushEnabled() != imapCfg2.pushEnabled());
+        if (notEqual)
+            closeIdleConnections();
+
+        if (imapCfg1.pushEnabled() != imapCfg2.pushEnabled()) {
+            if (imapCfg2.pushEnabled())
+                emit restartPushEmail();
+        }
+    }
+}
+
+void ImapClient::closeIdleConnections()
+{
+    qMailLog(IMAP) << Q_FUNC_INFO << "Account was modified. Closing connections";
+
+    closeConnection();
+    // closing idle connections
+    foreach(const QMailFolderId &id, _monitored.keys()) {
+        IdleProtocol *protocol = _monitored.take(id);
+        protocol->close();
+        delete protocol;
+    }
+    _idlesEstablished = false;
+}
+
+#endif
 
 #include "imapclient.moc"

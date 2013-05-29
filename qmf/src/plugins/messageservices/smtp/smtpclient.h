@@ -51,6 +51,10 @@
 #include <qmailmessageserver.h>
 #include <qmailtransport.h>
 
+#ifdef USE_ACCOUNTS_QT
+#include <ssosessionmanager.h>
+#endif
+
 class QTemporaryFile;
 
 struct RawEmail
@@ -72,6 +76,10 @@ public:
 
     void setAccount(const QMailAccountId &accountId);
     QMailAccountId account() const;
+
+#ifdef USE_ACCOUNTS_QT
+    void removeSsoIdentity(const QMailAccountId &accountId);
+#endif
 
     void newConnection();
     void cancelTransfer(QMailServiceAction::Status::ErrorCode code, const QString &text);
@@ -97,6 +105,10 @@ protected slots:
 private slots:
     void sendMoreData(qint64);
     void authExpired();
+#ifdef USE_ACCOUNTS_QT
+    void onSsoSessionResponse(const QList<QByteArray> &ssoCredentials);
+    void onSsoSessionError(const QString &error);
+#endif
 
 private:
     void sendCommand(const char *data, int len = -1);
@@ -112,11 +124,19 @@ private:
     void stopTransferring();
 
 private:
+#ifdef USE_ACCOUNTS_QT
+    enum TransferStatus
+    {
+        Init, Helo, Extension, StartTLS, TLS, Connected, SignOnSession,  Authenticating, Authenticated,
+        MetaData, From, Recv, MRcv, PrepareData, Data, Body, Chunk, ChunkSent, Sent, Quit, Done
+    };
+#else
     enum TransferStatus
     {
         Init, Helo, Extension, StartTLS, TLS, Connected, Authenticating, Authenticated,
         MetaData, From, Recv, MRcv, PrepareData, Data, Body, Chunk, ChunkSent, Sent, Quit, Done
     };
+#endif
 
     QMailAccountConfiguration config;
     TransferStatus status;
@@ -149,6 +169,14 @@ private:
     bool notUsingAuth;
 
     QTimer *authTimeout;
+
+#ifdef USE_ACCOUNTS_QT
+    SSOSessionManager* ssoSessionManager;
+    bool loginFailed;
+    bool sendLogin;
+    bool accountUpdated;
+    QList<QByteArray> ssoLogin;
+#endif
 };
 
 #endif

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2013 Jolla Ltd.
+** Contact: Valério Valério <valerio.valerio@jollamobile.com>
 **
 ** This file is part of the Qt Messaging Framework.
 **
@@ -39,25 +39,36 @@
 **
 ****************************************************************************/
 
-#ifndef POPAUTHENTICATOR_H
-#define POPAUTHENTICATOR_H
+#ifndef PASSWORDPLUGIN_H
+#define PASSWORDPLUGIN_H
 
-#include <qmailaccountconfiguration.h>
+#include "ssoauthplugin.h"
+#include <QtPlugin>
+#include <QVariantMap>
+#include <SignOn/SessionData>
 
-#include <QByteArray>
-#include <QStringList>
-
-class PopAuthenticator
+class SSOPasswordPlugin : public SSOAuthService
 {
-public:
-    static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#ifdef USE_ACCOUNTS_QT
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
-#else
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
+    Q_OBJECT
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.SSOPasswordPluginHandlerFactoryInterface")
 #endif
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
+
+public:
+    SSOPasswordPlugin( QObject *parent = 0 );
+    ~SSOPasswordPlugin();
+
+    virtual QString key() const;
+    virtual QList<QByteArray> authentication(const SignOn::SessionData &sessionData,
+                                         const QString &serviceType, const QString &userName, int serviceAuthentication) const;
+    virtual SignOn::SessionData sessionData(const QString &accountProvider, QVariantMap authParameters,
+                                            bool setUiPolicy) const;
+    virtual SSOAuthService* createService();
+
+private:
+    QList<QByteArray> getIMAPAuthentication(const QString &password, const QString &username, int serviceAuthentication) const;
+    QList<QByteArray> getPOPAuthentication(const QString &password, const QString &username, int serviceAuthentication) const;
+    QList<QByteArray> getSMTPAuthentication(const QString &password, const QString &username, int serviceAuthentication) const;
 };
 
-#endif
-
+#endif // PASSWORDPLUGIN_H

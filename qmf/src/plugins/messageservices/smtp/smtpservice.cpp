@@ -253,6 +253,11 @@ void SmtpService::onAccountsUpdated(const QMailAccountIdList &accountIds)
 
 SmtpService::~SmtpService()
 {
+#ifdef USE_ACCOUNTS_QT
+    //If account was deleted, we should remove appropriate signon identity from the signon.db
+    if (!accountId().isValid())
+        _client.removeSsoIdentity(accountId());
+#endif
     delete _sink;
 }
 

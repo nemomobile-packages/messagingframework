@@ -54,6 +54,10 @@
 #include <QSqlRecord>
 #include <QTextCodec>
 
+#ifdef USE_ACCOUNTS_QT
+#include <QSharedPointer>
+#endif
+
 #if defined(Q_OS_LINUX)
 #include <malloc.h>
 #endif
@@ -1772,7 +1776,15 @@ QString whereClauseItem<QMailAccountKey>(const QMailAccountKey &, const QMailAcc
         bool noCase((a.property == QMailAccountKey::Name) || (a.property == QMailAccountKey::FromAddress));
 
         QString expression = columnExpression(columnName, a.op, a.valueList, patternMatching, bitwise, noCase);
-        
+#ifdef USE_ACCOUNTS_QT
+        Q_UNUSED (store);
+        // Only ID could be queried here,
+        // All other properties will be queried
+        // from Accounts subsystem
+        Q_ASSERT(a.property == QMailAccountKey::Id);
+        q << expression;
+#else
+
         switch(a.property)
         {
         case QMailAccountKey::Id:
@@ -1812,14 +1824,18 @@ QString whereClauseItem<QMailAccountKey>(const QMailAccountKey &, const QMailAcc
         case QMailAccountKey::LastSynchronized:
             q << expression;
             break;
-        }
+        }  
+#endif
     }
     return item;
 }
 
 template<>
-QString whereClauseItem<QMailMessageKey>(const QMailMessageKey &, const QMailMessageKey::ArgumentType &a, const QString &alias, const QString &field, const QMailStorePrivate &store)
+QString whereClauseItem<QMailMessageKey>(const QMailMessageKey &key, const QMailMessageKey::ArgumentType &a, const QString &alias, const QString &field, const QMailStorePrivate &store)
 {
+#ifndef USE_ACCOUNTS_QT
+    Q_UNUSED(key);
+#endif
     QString item;
     {
         QTextStream q(&item);
@@ -1904,10 +1920,20 @@ QString whereClauseItem<QMailMessageKey>(const QMailMessageKey &, const QMailMes
         case QMailMessageKey::ParentAccountId:
             if(a.valueList.first().canConvert<QMailAccountKey>()) {
                 QMailAccountKey parentAccountKey = a.valueList.first().value<QMailAccountKey>();
+#ifdef USE_ACCOUNTS_QT
+                QMailAccountIdList parentAccountIdList = store.searchSSOAccounts(parentAccountKey);
+
+                // Rewrite argument and execute builder again
+                QMailMessageKey::ArgumentType &arg = const_cast<QMailMessageKey::ArgumentType&>(a);
+                arg = QMailMessageKey::parentAccountId(parentAccountIdList, QMailDataComparator::Includes).arguments().first();
+                return whereClauseItem(key, arg, alias, field, store);
+#else
+
                 QString nestedAlias(incrementAlias(alias));
 
                 q << baseExpression(columnName, a.op, true) << "( SELECT " << qualifiedName("id", nestedAlias) << " FROM mailaccounts " << nestedAlias;
                 q << store.buildWhereClause(QMailStorePrivate::Key(parentAccountKey, nestedAlias)) << ")";
+#endif
             } else {
                 q << expression;
             }
@@ -1985,8 +2011,11 @@ QString whereClauseItem<QMailMessageKey>(const QMailMessageKey &, const QMailMes
 }
 
 template<>
-QString whereClauseItem<QMailFolderKey>(const QMailFolderKey &, const QMailFolderKey::ArgumentType &a, const QString &alias, const QString &field, const QMailStorePrivate &store)
+QString whereClauseItem<QMailFolderKey>(const QMailFolderKey &key, const QMailFolderKey::ArgumentType &a, const QString &alias, const QString &field, const QMailStorePrivate &store)
 {
+#ifndef USE_ACCOUNTS_QT
+    Q_UNUSED(key);
+#endif
     QString item;
     {
         QTextStream q(&item);
@@ -2024,7 +2053,7 @@ QString whereClauseItem<QMailFolderKey>(const QMailFolderKey &, const QMailFolde
                 QString nestedAlias(incrementAlias(alias));
 
                 q << baseExpression(columnName, a.op, true) << "( SELECT " << qualifiedName("id", nestedAlias) << " FROM mailfolders " << nestedAlias;
-                q << store.buildWhereClause(QMailStorePrivate::Key(folderSubKey, nestedAlias)) << ")";
+                q << store.buildWhereClause(QMailStorePrivate::Key(folderSubKey, nestedAlias)) << ")";                
             } else {
                 q << expression;
             }
@@ -2051,10 +2080,19 @@ QString whereClauseItem<QMailFolderKey>(const QMailFolderKey &, const QMailFolde
         case QMailFolderKey::ParentAccountId:
             if(a.valueList.first().canConvert<QMailAccountKey>()) {
                 QMailAccountKey accountSubKey = a.valueList.first().value<QMailAccountKey>();
+#ifdef USE_ACCOUNTS_QT
+                QMailAccountIdList acountIdList = store.searchSSOAccounts(accountSubKey);
+
+                // Rewrite argument and execute builder again
+                QMailFolderKey::ArgumentType &arg = const_cast<QMailFolderKey::ArgumentType&>(a);
+                arg = QMailFolderKey::parentAccountId(acountIdList, QMailDataComparator::Includes).arguments().first();
+                return whereClauseItem(key, arg, alias, field, store);
+#else
                 QString nestedAlias(incrementAlias(alias));
 
                 q << baseExpression(columnName, a.op, true) << "( SELECT " << qualifiedName("id", nestedAlias) << " FROM mailaccounts " << nestedAlias;
                 q << store.buildWhereClause(QMailStorePrivate::Key(accountSubKey, nestedAlias)) << ")";
+#endif
             } else {
                 q << expression;
             }
@@ -2236,6 +2274,434 @@ QMailContentManager::DurabilityRequirement durability(bool commitOnSuccess)
 {
     return (commitOnSuccess ? QMailContentManager::EnsureDurability : QMailContentManager::DeferDurability);
 }
+#ifdef USE_ACCOUNTS_QT
+// Forward declaration
+bool SSOAccountSatisfyTheKey(Accounts::Account* ssoAccount, const QMailAccountKey& key);
+
+template <typename Property>
+bool SSOAccountCompareProperty(Accounts::Account* ssoAccount, Property value, QMailKey::Comparator op, const QMailAccountKey::ArgumentType::ValueList& arguments)
+{
+    // Argument list should not be empty.
+    // Otherwise we have nothing to compare.
+    Q_ASSERT(arguments.count());
+
+    if (arguments.count() == 1) {
+        if (!arguments.front().canConvert<Property>()) {
+            if (arguments.front().canConvert<QMailAccountKey>()) {
+                QMailAccountKey accountKey = arguments.front().value<QMailAccountKey>();
+                return SSOAccountSatisfyTheKey(ssoAccount, accountKey);
+            }
+
+            qMailLog(Messaging) << "Failed to convert argument";
+            return false;
+        }
+
+        Property argument = arguments.front().value<Property>();
+        switch (op) {
+            case QMailKey::Equal:
+                return value == argument;
+
+            case QMailKey::NotEqual:
+                return value != argument;
+
+            case QMailKey::Includes:
+            case QMailKey::Present:
+            case QMailKey::Excludes:
+            case QMailKey::Absent:
+            case QMailKey::LessThan:
+            case QMailKey::LessThanEqual:
+            case QMailKey::GreaterThan:
+            case QMailKey::GreaterThanEqual:
+            default:
+                qMailLog(Messaging) << "This comparator is not supported";
+                Q_ASSERT(false);
+                break;
+        }
+
+    } else {
+        switch (op) {
+            case QMailKey::Includes:
+            case QMailKey::Present:
+                foreach (const QVariant& argument, arguments) {
+                    if (argument.canConvert<Property>() && argument.value<Property>() == value)
+                        return true;
+                }
+                return false;
+
+            case QMailKey::Excludes:
+            case QMailKey::Absent:
+                foreach (const QVariant& argument, arguments) {
+                    if (argument.canConvert<Property>() && argument.value<Property>() == value)
+                        return false;
+                }
+                return true;
+
+
+            case QMailKey::LessThan:
+            case QMailKey::LessThanEqual:
+            case QMailKey::GreaterThan:
+            case QMailKey::GreaterThanEqual:
+            case QMailKey::Equal:
+            case QMailKey::NotEqual:
+            default:
+                qMailLog(Messaging) << "This comparator is not supported";
+                Q_ASSERT(false);
+                break;
+        }
+
+    }
+
+    Q_ASSERT(false);
+    return false;
+}
+
+template <>
+bool SSOAccountCompareProperty(Accounts::Account*, quint64 value, QMailKey::Comparator op, const QMailAccountKey::ArgumentType::ValueList& arguments)
+{
+    // Argument list should not be empty.
+    // Otherwise we have nothing to compare.
+    Q_ASSERT(arguments.count());
+
+    if (arguments.count() == 1) {
+        bool ok = false;
+        quint64 argument = arguments.front().toULongLong(&ok);
+        if (!ok) {
+            qMailLog(Messaging) << "Failed to convert to quing64";
+            return false;
+        }
+
+        switch (op) {
+            case QMailKey::LessThan:
+                return value < argument;
+
+            case QMailKey::LessThanEqual:
+                return value <= argument;
+
+            case QMailKey::GreaterThan:
+                return value > argument;
+
+            case QMailKey::GreaterThanEqual:
+                return value >= argument;
+
+            case QMailKey::Equal:
+                return value == argument;
+
+            case QMailKey::NotEqual:
+                return value != argument;
+
+            case QMailKey::Includes:
+            case QMailKey::Present:
+                return ((value & argument) == argument);
+
+            case QMailKey::Excludes:
+            case QMailKey::Absent:
+                return !(value & argument);
+
+            default:
+                Q_ASSERT(false);
+                break;
+        }
+
+    } else {
+
+        switch (op) {
+            case QMailKey::LessThan:
+            case QMailKey::LessThanEqual:
+            case QMailKey::GreaterThan:
+            case QMailKey::GreaterThanEqual:
+            case QMailKey::Equal:
+            case QMailKey::NotEqual:
+                // This comparator is not supported for multiple integer arguments
+                Q_ASSERT(false);
+                break;
+
+            case QMailKey::Includes:
+            case QMailKey::Present:
+                foreach (const QVariant& argument, arguments) {
+                    if (value == argument.toULongLong())
+                        return true;
+                }
+                return false;
+
+            case QMailKey::Excludes:
+            case QMailKey::Absent:
+                foreach (const QVariant& argument, arguments) {
+                    if (value == argument.toULongLong())
+                        return false;
+                }
+                return true;
+
+            default:
+                Q_ASSERT(false);
+                break;
+        }
+
+    }
+    Q_ASSERT(false);
+    return false;
+}
+
+template <>
+bool SSOAccountCompareProperty(Accounts::Account*, const QString& value, QMailKey::Comparator op, const QMailAccountKey::ArgumentType::ValueList& arguments)
+{
+    // Argument list should not be empty.
+    // Otherwise we have nothing to compare.
+    Q_ASSERT(arguments.count());
+
+    if (arguments.count() == 1) {
+        if (!arguments.front().canConvert<QString>()) {
+            qMailLog(Messaging) << "Failed to convert to string";
+            return false;
+        }
+
+        QString argument = arguments.front().toString();
+        switch (op) {
+            case QMailKey::LessThan:
+                return value < argument;
+
+            case QMailKey::LessThanEqual:
+                return value <= argument;
+
+            case QMailKey::GreaterThan:
+                return value > argument;
+
+            case QMailKey::GreaterThanEqual:
+                return value >= argument;
+
+            case QMailKey::Equal:
+                return value == argument;
+
+            case QMailKey::NotEqual:
+                return value != argument;
+
+            case QMailKey::Includes:
+            case QMailKey::Present:
+                return value.contains(argument);
+
+            case QMailKey::Excludes:
+            case QMailKey::Absent:
+                return !value.contains(argument);
+
+            default:
+                Q_ASSERT(false);
+                break;
+        }
+
+    } else {
+
+        switch (op) {
+            case QMailKey::LessThan:
+            case QMailKey::LessThanEqual:
+            case QMailKey::GreaterThan:
+            case QMailKey::GreaterThanEqual:
+            case QMailKey::Equal:
+            case QMailKey::NotEqual:
+                // This comparator is not supported for multiple integer arguments
+                Q_ASSERT(false);
+                break;
+
+            case QMailKey::Includes:
+            case QMailKey::Present:
+                foreach (const QVariant& argument, arguments) {
+                    if (value == argument.toString())
+                        return true;
+                }
+                return false;
+
+            case QMailKey::Excludes:
+            case QMailKey::Absent:
+                foreach (const QVariant& argument, arguments) {
+                    if (value == argument.toString())
+                        return false;
+                }
+                return true;
+
+            default:
+                Q_ASSERT(false);
+                break;
+        }
+
+    }
+    Q_ASSERT(false);
+    return false;
+}
+
+bool SSOAccountCompareProperty(Accounts::Account* ssoAccount, QMailKey::Comparator op, const QMailAccountKey::ArgumentType::ValueList& arguments)
+{
+    // Argument list should not be empty.
+    // Otherwise we have nothing to compare.
+    Q_ASSERT(arguments.count() == 1);
+
+    QStringList argument = arguments.front().toStringList();
+
+    QString key   = argument.front();
+    QString value = argument.count() == 2 ? argument.back() : QString();
+
+    ssoAccount->beginGroup("customFields");
+
+    bool result = false;
+    switch (op) {
+        case QMailKey::LessThan:
+        case QMailKey::LessThanEqual:
+        case QMailKey::GreaterThan:
+        case QMailKey::GreaterThanEqual:
+            // This comparator is not supported for custom fields
+            Q_ASSERT(false);
+            break;
+
+        case QMailKey::Equal:
+            result = ssoAccount->contains(key) && (ssoAccount->valueAsString(key) == value);
+            break;
+
+        case QMailKey::NotEqual:
+            result = !ssoAccount->contains(key) || (ssoAccount->valueAsString(key) != value);
+            break;
+
+        case QMailKey::Includes:
+        case QMailKey::Present:
+            result = ssoAccount->contains(key) &&  ssoAccount->valueAsString(key).contains(value);
+            break;
+
+        case QMailKey::Excludes:
+        case QMailKey::Absent:
+            result = !(ssoAccount->contains(key) && ssoAccount->valueAsString(key).contains(value));
+            break;
+
+        default:
+            Q_ASSERT(false);
+            break;
+    }
+    ssoAccount->endGroup();
+    return result;
+}
+
+bool SSOAccountSatisfyTheProperty(Accounts::Account* ssoAccount, const QMailAccountKey::ArgumentType& argument)
+{
+    Q_ASSERT(ssoAccount);
+
+    switch (argument.property) {
+        case QMailAccountKey::Id:
+            return SSOAccountCompareProperty<QMailAccountId>(ssoAccount, QMailAccountId(ssoAccount->id()), argument.op, argument.valueList);
+
+        case QMailAccountKey::Name:
+            return SSOAccountCompareProperty<const QString&>(ssoAccount, ssoAccount->displayName(), argument.op, argument.valueList);
+
+        case QMailAccountKey::MessageType:
+            return SSOAccountCompareProperty<quint64>(ssoAccount, ssoAccount->valueAsInt("type"), argument.op, argument.valueList);
+
+        case QMailAccountKey::FromAddress:
+            return SSOAccountCompareProperty<const QString&>(ssoAccount, QMailAddress(ssoAccount->valueAsString("emailaddress")).address(), argument.op, argument.valueList);
+
+        case QMailAccountKey::Status: {
+            Accounts::Service service = ssoAccount->selectedService();
+
+            ssoAccount->selectService();
+            const bool& enabled = ssoAccount->enabled();
+            ssoAccount->selectService(service);
+
+            quint64 status = ssoAccount->valueAsUInt64("status");
+            status &= (~QMailAccount::Enabled);
+            status |= enabled?(QMailAccount::Enabled):0;
+
+            return SSOAccountCompareProperty<quint64>(ssoAccount,
+                                                      status,
+                                                      argument.op, argument.valueList);
+        }
+
+        case QMailAccountKey::Custom:
+            return SSOAccountCompareProperty(ssoAccount, argument.op, argument.valueList);
+
+        default:
+            Q_ASSERT(false);
+            break;
+    }
+    return false;
+}
+
+bool SSOAccountSatisfyTheKey(Accounts::Account* ssoAccount, const QMailAccountKey& key)
+{
+    Q_ASSERT(ssoAccount);
+
+    if (key.isNonMatching())
+        return false;
+
+    if (key.isEmpty())
+        return true;
+
+    // In case of it is not compound key and has got a list of arguments
+    // follow the list of arguments and compare
+    if (!key.arguments().isEmpty()) {
+        typedef QList<QMailAccountKey::ArgumentType> ListOfArguments;
+        ListOfArguments::const_iterator it = key.arguments().begin();
+
+        bool result = SSOAccountSatisfyTheProperty(ssoAccount, *it);
+        while (++it != key.arguments().end()) {
+            switch (key.combiner()) {
+                case QMailKey::And:
+                    result = result && SSOAccountSatisfyTheProperty(ssoAccount, *it);
+                    break;
+                case QMailKey::Or:
+                    result = result || SSOAccountSatisfyTheProperty(ssoAccount, *it);
+                    break;
+                default:
+                    Q_ASSERT(false);
+                    break;
+            }
+        }
+
+        // Return negated value if key was negeated
+        return key.isNegated() ? !result : result;
+    }
+
+    // In case of compound key, process each subkey separatelly
+    if (!key.subKeys().isEmpty()) {
+        typedef QList<QMailAccountKey> ListOfKeys;
+        ListOfKeys::const_iterator it = key.subKeys().begin();
+
+        bool result = SSOAccountSatisfyTheKey(ssoAccount, *it);
+        while (++it != key.subKeys().end()) {
+            switch (key.combiner()) {
+                case QMailKey::And:
+                    result = result && SSOAccountSatisfyTheKey(ssoAccount, *it);
+                    break;
+                case QMailKey::Or:
+                    result = result || SSOAccountSatisfyTheKey(ssoAccount, *it);
+                    break;
+                default:
+                    Q_ASSERT(false);
+                    break;
+            }
+        }
+
+        // Return negated value if key was negeated
+        return key.isNegated() ? !result : result;
+    }
+
+    // This key is not empty and has neither subkeys nor arguments.
+    Q_ASSERT(false);
+    return false;
+}
+
+void SSOHandleError(const Accounts::Error& error)
+{
+    switch (error.type()) {
+    case Accounts::Error::NoError:
+        break;
+    case Accounts::Error::Deleted:
+    case Accounts::Error::AccountNotFound:
+        qWarning() << "Accounts:" << error.message();
+        break;
+    case Accounts::Error::Unknown:
+    case Accounts::Error::Database:
+    case Accounts::Error::DatabaseLocked:
+        qCritical() << "Accounts:" << error.message();
+        Q_ASSERT (false);
+        break;
+    default:
+        Q_ASSERT (false);
+    }
+}
+#endif
 
 } // namespace
 
@@ -2471,7 +2937,36 @@ QMailStorePrivate::QMailStorePrivate(QMailStore* parent)
         contentMutex = new ProcessMutex(databaseIdentifier(), 3);
     }
     connect(&databaseUnloadTimer, SIGNAL(timeout()), this, SLOT(unloadDatabase()));
+#ifdef USE_ACCOUNTS_QT
+    // manager to notify QMailStore about the changes
+    connect(manager, SIGNAL(accountCreated(Accounts::AccountId)), this, SLOT(accountCreated(Accounts::AccountId)));
+    connect(manager, SIGNAL(accountRemoved(Accounts::AccountId)), this, SLOT(accountRemoved(Accounts::AccountId)));
+    connect(manager, SIGNAL(accountUpdated(Accounts::AccountId)), this, SLOT(accountUpdated(Accounts::AccountId)));
+#endif
 }
+
+#ifdef USE_ACCOUNTS_QT
+QSharedPointer<Accounts::Account> QMailStorePrivate::getEmailAccount(const Accounts::AccountId id)
+{
+    //get account from the manager
+    QSharedPointer<Accounts::Account> ssoAccount(manager->account(id));
+
+    if (!ssoAccount) {
+        qWarning() << Q_FUNC_INFO << "Account with was not found" ;
+        SSOHandleError(manager->lastError());
+        return ssoAccount;
+    }
+
+    // check if it is an e-mail account
+    Accounts::ServiceList services = ssoAccount->enabledServices();
+    if (!services.count()) {
+        qWarning() << Q_FUNC_INFO << "E-mail Services not found, make sure that *.service and *.provider files are properly installed and e-mail services are enabled.";
+        ssoAccount = QSharedPointer<Accounts::Account>();
+    }
+
+    return ssoAccount;
+}
+#endif
 
 QMailStorePrivate::~QMailStorePrivate()
 {
@@ -2675,6 +3170,23 @@ void QMailStorePrivate::clearContent()
     threadCache.clear();
 
     Transaction t(this);
+
+#ifdef USE_ACCOUNTS_QT
+    // Remove all SSO email accounts
+    Accounts::AccountIdList accountIDList = manager->accountList("e-mail");
+
+    // Populate all E-Mail accounts
+    foreach (Accounts::AccountId accountID, accountIDList) {
+        // Remove account
+        QSharedPointer<Accounts::Account> ssoAccount = getEmailAccount(accountID);
+
+        if (ssoAccount) {
+            ssoAccount->remove();
+            ssoAccount->syncAndBlock();
+        } else
+            SSOHandleError(manager->lastError());
+    }
+#endif
 
     // Drop all data
     foreach (const QString &table, database()->tables()) {
@@ -2997,10 +3509,18 @@ bool QMailStorePrivate::idValueExists(quint64 id, const QString& table)
     return (query.first());
 }
 
+#ifdef USE_ACCOUNTS_QT
+bool QMailStorePrivate::idExists(const QMailAccountId& id)
+{
+    QSharedPointer<Accounts::Account> ssoAccount = getEmailAccount(id.toULongLong());
+    return (ssoAccount != NULL);
+}
+#else
 bool QMailStorePrivate::idExists(const QMailAccountId& id, const QString& table)
 {
     return idValueExists(id.toULongLong(), (table.isEmpty() ? "mailaccounts" : table));
 }
+#endif
 
 bool QMailStorePrivate::idExists(const QMailFolderId& id, const QString& table)
 {
@@ -3029,6 +3549,44 @@ bool QMailStorePrivate::messageExists(const QString &serveruid, const QMailAccou
     return query.first();
 }
 
+#ifdef USE_ACCOUNTS_QT
+QMailAccount QMailStorePrivate::extractAccount(const QSharedPointer<Accounts::Account>& ssoAccount)
+{
+    Q_ASSERT(ssoAccount);
+
+    QMailAccount result;
+    result.setId(QMailAccountId(ssoAccount->id()));
+    QString name = ssoAccount->valueAsString("email/email_box_name");
+    if (name.isEmpty())
+        name = ssoAccount->displayName();
+    result.setName(name);
+    result.setMessageType(static_cast<QMailMessageMetaDataFwd::MessageType>(ssoAccount->valueAsInt("type")));
+    result.setStatus(ssoAccount->valueAsUInt64("status"));
+
+    Accounts::Service service = ssoAccount->selectedService();
+
+    ssoAccount->selectService();
+    const bool& enabled = ssoAccount->enabled();
+    ssoAccount->selectService(service);
+    const bool& isDefault = ssoAccount->valueAsBool("email/default");
+
+    result.setStatus(QMailAccount::Enabled, enabled);
+    result.setStatus(QMailAccount::PreferredSender, isDefault);
+
+    result.setSignature(ssoAccount->valueAsString("signature"));
+    result.setFromAddress(ssoAccount->contains("fullName")?
+                          QMailAddress(ssoAccount->valueAsString("fullName"),ssoAccount->valueAsString("emailaddress")):
+                          QMailAddress(ssoAccount->valueAsString("emailaddress")));
+
+    if ((static_cast<uint>(ssoAccount->valueAsUInt64("lastSynchronized"))) == 0) {
+            result.setLastSynchronized(QMailTimeStamp());
+    }
+    else {
+        result.setLastSynchronized(QMailTimeStamp(QDateTime::fromTime_t(static_cast<uint>(ssoAccount->valueAsUInt64("lastSynchronized")))));
+    }
+    return result;
+}
+#else
 QMailAccount QMailStorePrivate::extractAccount(const QSqlRecord& r)
 {
     const AccountRecord record(r);
@@ -3044,7 +3602,7 @@ QMailAccount QMailStorePrivate::extractAccount(const QSqlRecord& r)
 
     return result;
 }
-
+#endif
 
 QMailThread QMailStorePrivate::extractThread(const QSqlRecord& r)
 {
@@ -3287,8 +3845,12 @@ QString QMailStorePrivate::buildOrderClause(const Key& key) const
         const QMailThreadSortKey &sortKey(key.key<QMailThreadSortKey>());
         return ::buildOrderClause(sortKey.arguments(), key.alias());
     } else if (key.isType<QMailAccountSortKey>()) {
+#ifdef USE_ACCOUNTS_QT
+        Q_ASSERT(false);
+#else
         const QMailAccountSortKey &sortKey(key.key<QMailAccountSortKey>());
         return ::buildOrderClause(sortKey.arguments(), key.alias());
+#endif
     } 
 
     return QString();
@@ -5355,6 +5917,107 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::updateCustomFields(quint64 i
     return Success;
 }
 
+#ifdef USE_ACCOUNTS_QT
+QMailStorePrivate::AttemptResult QMailStorePrivate::addAccountCustomFields(QSharedPointer<Accounts::Account>& ssoAccount, const QMap<QString, QString>& fields)
+{
+    if (!fields.isEmpty()) {
+        ssoAccount->beginGroup("customFields");
+
+        // Insert any custom fields belonging to this account
+        QMap<QString, QString>::const_iterator it = fields.begin(), end = fields.end();
+        for ( ; it != end; ++it) {
+            ssoAccount->setValue(it.key(), QVariant(it.value()));
+        }
+        ssoAccount->endGroup();
+
+        if (!ssoAccount->syncAndBlock())
+            return DatabaseFailure;
+    }
+
+    return Success;
+}
+
+QMailStorePrivate::AttemptResult QMailStorePrivate::updateAccountCustomFields(QSharedPointer<Accounts::Account>& ssoAccount, const QMap<QString, QString> &fields)
+{
+    ssoAccount->beginGroup("customFields");
+
+    QMap<QString, QString> existing;
+    {
+        foreach (const QString& name, ssoAccount->allKeys()) {
+             existing.insert(name, ssoAccount->valueAsString(name));
+        }
+    }
+
+    QVariantList obsoleteFields;
+    QVariantList modifiedFields;
+    QVariantList modifiedValues;
+    QVariantList addedFields;
+    QVariantList addedValues;
+
+    // Compare the sets
+    QMap<QString, QString>::const_iterator fend = fields.end(), eend = existing.end();
+    QMap<QString, QString>::const_iterator it = existing.begin();
+    for ( ; it != eend; ++it) {
+        QMap<QString, QString>::const_iterator current = fields.find(it.key());
+        if (current == fend) {
+            obsoleteFields.append(QVariant(it.key()));
+        } else if (*current != *it) {
+            modifiedFields.append(QVariant(current.key()));
+            modifiedValues.append(QVariant(current.value()));
+        }
+    }
+
+    for (it = fields.begin(); it != fend; ++it) {
+        if (existing.find(it.key()) == eend) {
+            addedFields.append(QVariant(it.key()));
+            addedValues.append(QVariant(it.value()));
+        }
+    }
+
+    if (!obsoleteFields.isEmpty()) {
+        // Remove the obsolete fields
+        foreach (const QVariant& obsolet, obsoleteFields) {
+            ssoAccount->remove(obsolet.toString());
+        }
+    }
+
+    if (!modifiedFields.isEmpty()) {
+        // Batch update of the modified fields
+        QVariantList::const_iterator field = modifiedFields.begin();
+        QVariantList::const_iterator value = modifiedValues.begin();
+        while (field != modifiedFields.end() && value != modifiedValues.end())
+            ssoAccount->setValue(field++->toString(), *value++);
+    }
+
+    if (!addedFields.isEmpty()) {
+        // Batch insert of the added fields
+        QVariantList::const_iterator field = addedFields.begin();
+        QVariantList::const_iterator value = addedValues.begin();
+        while (field != addedFields.end() && value != addedValues.end())
+            ssoAccount->setValue(field++->toString(), *value++);
+
+    }
+
+    ssoAccount->endGroup();
+    if (!ssoAccount->syncAndBlock())
+        return DatabaseFailure;
+
+    return Success;
+}
+
+QMailStorePrivate::AttemptResult QMailStorePrivate::accountCustomFields(QSharedPointer<Accounts::Account>& ssoAccount, QMap<QString, QString>* fields)
+{
+    ssoAccount->beginGroup("customFields");
+    foreach (const QString& key, ssoAccount->allKeys()) {
+        qMailLog(Messaging) << "Custom Field:" << key << "=" << ssoAccount->valueAsString(key);
+        fields->insert(key, ssoAccount->valueAsString(key));
+    }
+    ssoAccount->endGroup();
+
+    return Success;
+}
+#endif
+
 QMailStorePrivate::AttemptResult QMailStorePrivate::customFields(quint64 id, QMap<QString, QString> *fields, const QString &tableName)
 {
     QString sql("SELECT name,value FROM %1 WHERE id=?");
@@ -5370,6 +6033,130 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::customFields(quint64 id, QMa
     return Success;
 }
 
+#ifdef USE_ACCOUNTS_QT
+QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccount *account, QMailAccountConfiguration* config,
+                                                                      QMailAccountIdList *addedAccountIds,
+                                                                      Transaction &t, bool commitOnSuccess)
+{
+    if (account->id().isValid() && idExists(account->id())) {
+        qWarning() << "Account already exists in database, use update instead";
+        return Failure;
+    }
+
+    // Create new account in Accounts subsystem
+    QSharedPointer<Accounts::Account> ssoAccount(manager->createAccount("GenericProvider"));
+    if (!ssoAccount) {
+        SSOHandleError(manager->lastError());
+        qMailLog(Messaging) << "Failed to create account";
+        return DatabaseFailure;
+    }
+
+    ssoAccount->setDisplayName(account->name());
+    ssoAccount->setEnabled(account->status() & QMailAccount::Enabled);
+
+    Accounts::ServiceList services = ssoAccount->services("e-mail");
+    if (!services.count()) {
+        qMailLog(Messaging) << "E-mail Services not found, make sure that *.service and *.provider files are properly installed.";
+        return DatabaseFailure;
+    }
+    Q_ASSERT (services.count() == 1);
+    Accounts::Service service = services.first();
+    Q_ASSERT(service.serviceType() == "e-mail");
+
+    ssoAccount->selectService(service);
+    ssoAccount->setEnabled(true); // service is enabled anyway
+    ssoAccount->setValue("type", static_cast<int>(account->messageType()));
+    ssoAccount->setValue("status", account->status());
+    ssoAccount->setValue("signature", account->signature());
+    ssoAccount->setValue("emailaddress", account->fromAddress().address());
+    ssoAccount->setValue("fullName", account->fromAddress().name());
+    //Account was never synced
+    ssoAccount->setValue("lastSynchronized", quint64(0));
+
+    if (!ssoAccount->syncAndBlock())
+        return DatabaseFailure;
+
+    //Extract the insert id
+    QMailAccountId insertId = QMailAccountId(ssoAccount->id());
+
+    {
+        // Insert any standard folders configured for this account
+        const QMap<QMailFolder::StandardFolder, QMailFolderId> &folders(account->standardFolders());
+        if (!folders.isEmpty()) {
+            QVariantList types;
+            QVariantList folderIds;
+
+            QMap<QMailFolder::StandardFolder, QMailFolderId>::const_iterator it = folders.begin(), end = folders.end();
+            for ( ; it != end; ++it) {
+                types.append(static_cast<int>(it.key()));
+                folderIds.append(it.value().toULongLong());
+            }
+
+            // Batch insert the folders
+            QString sql("INSERT into mailaccountfolders (id,foldertype,folderid) VALUES (%1,?,?)");
+            QSqlQuery query(batchQuery(sql.arg(QString::number(insertId.toULongLong())),
+                                       QVariantList() << QVariant(types)
+                                       << QVariant(folderIds),
+                                       "addAccount mailaccountfolders query"));
+            if (query.lastError().type() != QSqlError::NoError) {
+                ssoAccount->remove();
+                ssoAccount->syncAndBlock();
+                return DatabaseFailure;
+            }
+        }
+
+        // Insert any custom fields belonging to this account
+        AttemptResult result = addAccountCustomFields(ssoAccount, account->customFields());
+        if (result != Success) {
+            ssoAccount->remove();
+            ssoAccount->syncAndBlock();
+            return result;
+        }
+    }
+
+    if (config) {
+        foreach (const QString &service, config->services()) {
+            QMailAccountConfiguration::ServiceConfiguration &serviceConfig(config->serviceConfiguration(service));
+            const QMap<QString, QString> &fields = serviceConfig.values();
+            QString serviceName = serviceConfig.service();
+
+            // Open configuration group
+            ssoAccount->beginGroup(serviceName);
+
+            // Insert any configuration fields belonging to this account
+            QMap<QString, QString>::const_iterator it = fields.begin(), end = fields.end();
+            for ( ; it != end; ++it) {
+                ssoAccount->setValue(it.key(), QVariant(it.value()));
+            }
+            // Close group of keys
+            ssoAccount->endGroup();
+        }
+
+        // Save all changes
+        if (!ssoAccount->syncAndBlock()) {
+            ssoAccount->remove();
+            ssoAccount->syncAndBlock();
+            return DatabaseFailure;
+        }
+
+        config->setId(insertId);
+    }
+
+    account->setId(insertId);
+
+    if (commitOnSuccess && !t.commit()) {
+        qWarning() << "Could not commit account changes to database";
+
+        account->setId(QMailAccountId()); //revert the id
+        ssoAccount->remove();
+        ssoAccount->syncAndBlock();
+        return DatabaseFailure;
+    }
+
+    addedAccountIds->append(insertId);
+    return Success;
+}
+#else
 QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccount *account, QMailAccountConfiguration* config, 
                                                                       QMailAccountIdList *addedAccountIds, 
                                                                       Transaction &t, bool commitOnSuccess)
@@ -5470,6 +6257,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccou
     addedAccountIds->append(insertId);
     return Success;
 }
+#endif
 
 QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddFolder(QMailFolder *folder, 
                                                                      QMailFolderIdList *addedFolderIds, QMailAccountIdList *modifiedAccountIds,
@@ -6043,7 +6831,50 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
     if (!id.isValid())
         return Failure;
 
+#ifdef USE_ACCOUNTS_QT
+    QSharedPointer<Accounts::Account> ssoAccount = getEmailAccount(id.toULongLong());
+    if (!ssoAccount)
+      return Failure;
+
+    Accounts::ServiceList services = ssoAccount->enabledServices();
+    Q_ASSERT (services.count() == 1);
+    Accounts::Service service = services.first();
+
+    Q_ASSERT(service.isValid());
+    Q_ASSERT(service.serviceType() == "e-mail");
+#endif
+
     if (account) {
+#ifdef USE_ACCOUNTS_QT
+        ssoAccount->selectService(service);
+        bool isEmailBoxName = false;
+        if(!ssoAccount->valueAsString("email/email_box_name").isEmpty()) {
+            isEmailBoxName = true;
+            ssoAccount->setValue("email/email_box_name",account->name());
+        }
+        ssoAccount->selectService();
+        if (isEmailBoxName) {
+            ssoAccount->setDisplayName(ssoAccount->valueAsString("username"));
+        }
+        else {
+            ssoAccount->setDisplayName(account->name());
+        }
+        ssoAccount->setEnabled(account->status() & QMailAccount::Enabled);
+        ssoAccount->selectService(service);
+        ssoAccount->setValue("type", static_cast<int>(account->messageType()));
+        ssoAccount->setValue("status", account->status());
+        ssoAccount->setValue("signature", account->signature());
+        ssoAccount->setValue("emailaddress", account->fromAddress().address());
+        ssoAccount->setValue("fullName", account->fromAddress().name());
+        if (account->lastSynchronized().isValid()) {
+            ssoAccount->setValue("lastSynchronized", static_cast<quint64>(account->lastSynchronized().toLocalTime().toTime_t()));
+        }
+        else {
+            ssoAccount->setValue("lastSynchronized", quint64(0));
+        }
+        bool isDefault = account->status() & QMailAccount::PreferredSender;
+        ssoAccount->setValue("email/default", isDefault);
+#else
         QString properties("type=?, name=?, emailaddress=?, status=?, signature=?, lastsynchronized=?");
         QVariantList propertyValues;
         propertyValues << static_cast<int>(account->messageType()) 
@@ -6060,7 +6891,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
             if (query.lastError().type() != QSqlError::NoError)
                 return DatabaseFailure;
         }
-
+#endif
         // Update any standard folders configured
         const QMap<QMailFolder::StandardFolder, QMailFolderId> &folders(account->standardFolders());
         QMap<QMailFolder::StandardFolder, QMailFolderId> existingFolders;
@@ -6135,13 +6966,20 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
         }
 
         if (account->customFieldsModified()) {
+#ifdef USE_ACCOUNTS_QT
+            AttemptResult result = updateAccountCustomFields(ssoAccount, account->customFields());
+#else
             AttemptResult result = updateCustomFields(id.toULongLong(), account->customFields(), "mailaccountcustom");
+#endif
             if (result != Success)
                 return result;
         }
     }
 
     if (config) {
+#ifdef USE_ACCOUNTS_QT
+        ssoAccount->selectService(service);
+#endif
         // Find the complete set of configuration fields
         QMap<QPair<QString, QString>, QString> fields;
 
@@ -6159,6 +6997,17 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
         QMap<QPair<QString, QString>, QString> existing;
 
         {
+#ifdef USE_ACCOUNTS_QT
+            foreach (const QString& group, ssoAccount->childGroups()) {
+                if (group != "customFields") {
+                    ssoAccount->beginGroup(group);
+                    foreach (const QString& name, ssoAccount->allKeys()) {
+                         existing.insert(qMakePair(group, name), ssoAccount->valueAsString(name));
+                    }
+                    ssoAccount->endGroup();
+                }
+            }
+#else
             QSqlQuery query(simpleQuery("SELECT service,name,value FROM mailaccountconfig WHERE id=?",
                                         QVariantList() << id.toULongLong(),
                                         "updateAccount mailaccountconfig select query"));
@@ -6167,6 +7016,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
 
             while (query.next())
                 existing.insert(qMakePair(query.value(0).toString(), query.value(1).toString()), query.value(2).toString());
+#endif
         }
 
         QMap<QString, QVariantList> obsoleteFields;
@@ -6203,13 +7053,20 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
             for ( ; it != end; ++it) {
                 const QString &service = it.key();
                 const QVariantList &fields = it.value();
-                
+#ifdef USE_ACCOUNTS_QT
+                ssoAccount->beginGroup(service);
+                foreach (const QVariant& field, fields) {
+                    ssoAccount->remove(field.toString());
+                }
+                ssoAccount->endGroup();
+#else
                 QString sql("DELETE FROM mailaccountconfig WHERE id=? AND service='%1' AND name IN %2");
                 QSqlQuery query(simpleQuery(sql.arg(service).arg(expandValueList(fields)),
                                             QVariantList() << id.toULongLong() << fields,
                                             "updateAccount mailaccountconfig delete query"));
                 if (query.lastError().type() != QSqlError::NoError)
                     return DatabaseFailure;
+#endif
             }
         }
 
@@ -6220,13 +7077,23 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
                 const QString &service = it.key();
                 const QVariantList &fields = it.value();
                 const QVariantList &values = vit.value();
-                
+#ifdef USE_ACCOUNTS_QT
+                QVariantList::const_iterator field = fields.begin();
+                QVariantList::const_iterator value = values.begin();
+
+                ssoAccount->beginGroup(service);
+                while (field != fields.end() && value != values.end())
+                    ssoAccount->setValue(field++->toString(), *value++);
+
+                ssoAccount->endGroup();
+#else
                 QString sql("UPDATE mailaccountconfig SET value=? WHERE id=%1 AND service='%2' AND name=?");
                 QSqlQuery query(batchQuery(sql.arg(QString::number(id.toULongLong())).arg(service),
                                            QVariantList() << QVariant(values) << QVariant(fields),
                                            "updateAccount mailaccountconfig update query"));
                 if (query.lastError().type() != QSqlError::NoError)
                     return DatabaseFailure;
+#endif
             }
         }
 
@@ -6237,13 +7104,23 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
                 const QString &service = it.key();
                 const QVariantList &fields = it.value();
                 const QVariantList &values = vit.value();
-                
+#ifdef USE_ACCOUNTS_QT
+                QVariantList::const_iterator field = fields.begin();
+                QVariantList::const_iterator value = values.begin();
+
+                ssoAccount->beginGroup(service);
+                while (field != fields.end() && value != values.end())
+                    ssoAccount->setValue(field++->toString(), *value++);
+
+                ssoAccount->endGroup();
+#else
                 QString sql("INSERT INTO mailaccountconfig (id,service,name,value) VALUES (%1,'%2',?,?)");
                 QSqlQuery query(batchQuery(sql.arg(QString::number(id.toULongLong())).arg(service),
                                            QVariantList() << QVariant(fields) << QVariant(values),
                                            "updateAccount mailaccountconfig insert query"));
                 if (query.lastError().type() != QSqlError::NoError)
                     return DatabaseFailure;
+#endif
             }
         }
     }
@@ -6252,7 +7129,12 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
         qWarning() << "Could not commit account update to database";
         return DatabaseFailure;
     }
-        
+
+#ifdef USE_ACCOUNTS_QT
+    if (!ssoAccount->syncAndBlock())
+        return DatabaseFailure;
+#endif
+
     if (account) {
         // Update the account cache
         if (accountCache.contains(id))
@@ -7233,6 +8115,10 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptEnsureDurability(Tran
 QMailStorePrivate::AttemptResult QMailStorePrivate::attemptCountAccounts(const QMailAccountKey &key, int *result, 
                                                                          ReadLock &)
 {
+#ifdef USE_ACCOUNTS_QT
+    QMailAccountIdList accountIDList = searchSSOAccounts(key);
+    *result =  accountIDList.count();
+#else
     QSqlQuery query(simpleQuery("SELECT COUNT(*) FROM mailaccounts",
                                 Key(key),
                                 "countAccounts mailaccounts query"));
@@ -7241,7 +8127,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptCountAccounts(const Q
 
     if (query.first())
         *result = extractValue<int>(query.value(0));
-
+#endif
     return Success;
 }
 
@@ -7312,6 +8198,14 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptQueryAccounts(const Q
                                                                          QMailAccountIdList *ids, 
                                                                          ReadLock &)
 {
+#ifdef USE_ACCOUNTS_QT
+    QMailAccountIdList accountIDList = searchSSOAccounts(key, sortKey);
+
+    if (limit)
+        *ids << accountIDList.mid(offset, limit);
+    else
+        *ids << accountIDList.mid(offset, -1);
+#else
     QSqlQuery query(simpleQuery("SELECT id FROM mailaccounts",
                                 QVariantList(),
                                 QList<Key>() << Key(key) << Key(sortKey),
@@ -7322,7 +8216,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptQueryAccounts(const Q
 
     while (query.next())
         ids->append(QMailAccountId(extractValue<quint64>(query.value(0))));
-
+#endif
     return Success;
 }
 
@@ -7386,6 +8280,71 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptQueryMessages(const Q
     return Success;
 }
 
+#ifdef USE_ACCOUNTS_QT
+QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAccount(const QMailAccountId &id,
+                                                                   QMailAccount *result,
+                                                                   ReadLock &)
+{
+    if (!id.isValid())
+        return Failure;
+
+    QSharedPointer<Accounts::Account> ssoAccount = getEmailAccount(id.toULongLong());
+    if (!ssoAccount) {
+        return Failure;
+    }
+    Accounts::ServiceList services = ssoAccount->enabledServices();
+    Q_ASSERT (services.count() == 1);
+    Accounts::Service service = services.first();
+
+    Q_ASSERT(service.serviceType() == "e-mail");
+
+    ssoAccount->selectService(service);
+
+    *result = extractAccount(ssoAccount);
+    Q_ASSERT(result->id() == id);
+
+    {
+        // Find any standard folders configured for this account
+        QSqlQuery query(simpleQuery("SELECT foldertype,folderid FROM mailaccountfolders WHERE id=?",
+                                    QVariantList() << id.toULongLong(),
+                                    "account mailaccountfolders query"));
+        if (query.lastError().type() != QSqlError::NoError)
+            return DatabaseFailure;
+
+        while (query.next())
+            result->setStandardFolder(QMailFolder::StandardFolder(query.value(0).toInt()), QMailFolderId(query.value(1).toULongLong()));
+    }
+
+    // Find any custom fields for this SSO account
+    QMap<QString, QString> fields;
+    AttemptResult attemptResult = accountCustomFields(ssoAccount, &fields);
+    if (attemptResult != Success)
+        return attemptResult;
+
+    result->setCustomFields(fields);
+    result->setCustomFieldsModified(false);
+
+    // Find the type of the account
+    foreach (const QString& group, ssoAccount->childGroups()) {
+        if (group != "customFields") {
+            ssoAccount->beginGroup(group);
+
+            QString serviceType = ssoAccount->valueAsString("servicetype");
+            if (serviceType.contains("source"))
+                result->addMessageSource(group);
+
+            if (serviceType.contains("sink"))
+                result->addMessageSink(group);
+
+            ssoAccount->endGroup();
+        }
+    }
+
+    //update cache
+    accountCache.insert(*result);
+    return Success;
+}
+#else
 QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAccount(const QMailAccountId &id, 
                                                                    QMailAccount *result, 
                                                                    ReadLock &)
@@ -7452,7 +8411,50 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAccount(const QMailAc
 
     return Failure;
 }
+#endif
 
+#ifdef USE_ACCOUNTS_QT
+QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAccountConfiguration(const QMailAccountId &id,
+                                                                                QMailAccountConfiguration *result,
+                                                                                ReadLock &)
+{
+    QSharedPointer<Accounts::Account> ssoAccount = getEmailAccount(id.toULongLong());
+
+    if (!ssoAccount)
+        return Failure;
+
+    Accounts::ServiceList services = ssoAccount->enabledServices();
+    Q_ASSERT (services.count() == 1);
+
+    Accounts::Service service = services.first();
+
+    Q_ASSERT(service.serviceType() == "e-mail");
+    ssoAccount->selectService(service);
+
+    foreach (const QString& group, ssoAccount->childGroups()) {
+        if (group != "customFields") {
+            if (!result->services().contains(group)) {
+                // Add this service to the configuration
+                result->addServiceConfiguration(group);
+            }
+
+            QMailAccountConfiguration::ServiceConfiguration* serviceConfig = &result->serviceConfiguration(group);
+            Q_ASSERT(serviceConfig);
+
+            ssoAccount->beginGroup(group);
+            foreach (const QString& key, ssoAccount->allKeys()) {
+                serviceConfig->setValue(key,ssoAccount->valueAsString(key));
+            }
+            ssoAccount->endGroup();
+        }
+    }
+
+    result->setId(id);
+    result->setModified(false);
+
+    return Success;
+}
+#else
 QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAccountConfiguration(const QMailAccountId &id, 
                                                                                 QMailAccountConfiguration *result, 
                                                                                 ReadLock &)
@@ -7502,6 +8504,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAccountConfiguration(
 
     return Success;
 }
+#endif
 
 QMailStorePrivate::AttemptResult QMailStorePrivate::attemptThread(const QMailThreadId &id, QMailThread *result, ReadLock &)
 {
@@ -8619,11 +9622,26 @@ bool QMailStorePrivate::checkPreconditions(const QMailFolder& folder, bool updat
 
     if(folder.parentAccountId().isValid())
     {
-        if(!idExists(folder.parentAccountId(),"mailaccounts"))
-        {
+#ifdef USE_ACCOUNTS_QT
+
+        Accounts::AccountId accountId = folder.parentAccountId().toULongLong();
+        QSharedPointer<Accounts::Account> ssoAccount = getEmailAccount(accountId);
+
+        if (!ssoAccount) {
+          qWarning() << "Parent account does not exist!";
+          return false;
+        }
+
+        if (!ssoAccount->supportsService("e-mail")) {
+          qMailLog(Messaging) << "Parent account does not support e-mail service!";
+          return false;
+        }
+#else
+        if(!idExists(folder.parentAccountId(),"mailaccounts")) {
             qWarning() << "Parent account does not exist!";
             return false;
         }
+#endif
     }
 
     return true;
@@ -9148,6 +10166,14 @@ bool QMailStorePrivate::deleteAccounts(const QMailAccountKey& key,
                                        QMailThreadIdList& modifiedThreadIds,
                                        QMailAccountIdList& modifiedAccountIds)
 {
+#ifdef USE_ACCOUNTS_QT
+    // Searching across all accounts inside SSO
+    deletedAccountIds << searchSSOAccounts(key);
+
+    // No accounts? Then we're already done
+    if (deletedAccountIds.isEmpty())
+        return true;
+#else
     {
         // Get the identifiers for all the accounts we're deleting
         QSqlQuery query(simpleQuery("SELECT t0.id FROM mailaccounts t0",
@@ -9167,6 +10193,7 @@ bool QMailStorePrivate::deleteAccounts(const QMailAccountKey& key,
         if (noAccounts)
             return true;
     }
+#endif
 
     // We won't create new message removal records, since there will be no account to link them to
     QMailStore::MessageRemovalOption option(QMailStore::NoRemovalRecord);
@@ -9211,7 +10238,22 @@ bool QMailStorePrivate::deleteAccounts(const QMailAccountKey& key,
         // Delete all threads contained by the account we're deleting
         if (!deleteThreads(threadKey, option, deletedThreadIds, deletedMessageIds, expiredContent, updatedMessageIds, modifiedFolderIds, modifiedThreadIds, modifiedAccountIds))
             return false;
+#ifdef USE_ACCOUNTS_QT
+    {
+        // Remove accounts from SSO
+        foreach (const QMailAccountId& accountID, deletedAccountIds) {
 
+            QSharedPointer<Accounts::Account> ssoAccount(manager->account(accountID.toULongLong()));
+
+            if (ssoAccount) {
+                ssoAccount->remove();
+                if (!ssoAccount->syncAndBlock())
+                    return false;
+            } else
+                SSOHandleError(manager->lastError());
+        }
+    }
+#else
     {
         // Remove any custom fields associated with these accounts
         QSqlQuery query(simpleQuery("DELETE FROM mailaccountcustom",
@@ -9238,7 +10280,7 @@ bool QMailStorePrivate::deleteAccounts(const QMailAccountKey& key,
         if (query.lastError().type() != QSqlError::NoError)
             return false;
     }
-
+#endif
     // Do not report any deleted entities as updated
     for (QMailMessageIdList::iterator mit = updatedMessageIds.begin(); mit != updatedMessageIds.end(); ) {
         if (deletedMessageIds.contains(*mit)) {
@@ -9597,3 +10639,133 @@ void QMailStorePrivate::emitIpcNotification(const QMailMessageIdList& ids, quint
     q_ptr->messagesUpdated(ids);
 }
 
+#ifdef USE_ACCOUNTS_QT
+QMailAccountIdList QMailStorePrivate::searchSSOAccounts(const QMailAccountKey& key, const QMailAccountSortKey& sortKey) const
+{
+    Q_UNUSED (sortKey);
+
+    Accounts::AccountIdList accountIDList = manager->accountList("e-mail");
+
+    // Populate all E-Mail accounts
+    typedef QList<Accounts::Account*> AccountList;
+    QMailAccountIdList accountList;
+
+    foreach (const Accounts::AccountId& accountID, accountIDList) {
+        Accounts::Account* ssoAccount = manager->account(accountID);
+        if (!ssoAccount) {
+            SSOHandleError(manager->lastError());
+            continue;
+        }
+
+        Accounts::ServiceList services = ssoAccount->enabledServices();
+        const int &count = services.count();
+        switch (count) {
+        case 0: // ignore such accounts
+            break;
+        case 1: {
+            Accounts::Service service = services.first();
+            ssoAccount->selectService(service);
+            if (SSOAccountSatisfyTheKey(ssoAccount, key))
+                accountList.append(QMailAccountId(ssoAccount->id()));
+            } break;
+        default:
+            qCritical() << Q_FUNC_INFO << "Account must contain one enabled email service. Got" << count
+                        << "for account" << accountID;
+            Q_ASSERT (false);
+            return QMailAccountIdList();
+        }
+
+        delete ssoAccount;
+    }
+
+    /*
+     * TBD: Use sortKey to sort found accounts properly
+     */
+
+    return accountList;
+}
+
+void QMailStorePrivate::accountCreated(Accounts::AccountId id)
+{
+    // ignore non-email accounts
+    if (!accountValid(id))
+        return;
+
+    QMailAccountIdList ids;
+    ids << QMailAccountId(id);
+    Q_Q(QMailStore);
+
+    ENFORCE(QMetaObject::invokeMethod(q, "accountsAdded", Qt::QueuedConnection, Q_ARG(QMailAccountIdList, ids)));
+}
+
+void QMailStorePrivate::accountRemoved(Accounts::AccountId id)
+{
+    // ignore non-email accounts
+    if (!accountValid(id))
+        return;
+
+    const QMailAccountId& qId = QMailAccountId(id);
+    ENFORCE(QMetaObject::invokeMethod(this, "onAccountRemovedFinished", Qt::QueuedConnection, Q_ARG(QMailAccountId, qId)));
+}
+
+void QMailStorePrivate::onAccountRemovedFinished(const QMailAccountId &id)
+{
+    Q_Q (QMailStore);
+    emit q->accountsRemoved(QMailAccountIdList() << id);
+    // remove from cache after the notification, so that it is possible to
+    // know details of the removed account
+    accountCache.remove(id);
+}
+
+void QMailStorePrivate::accountUpdated(Accounts::AccountId id)
+{
+    if (!accountValid(id))
+        return;
+
+    const QMailAccountId& qId = QMailAccountId(id);
+    accountCache.remove(qId);
+    Q_Q(QMailStore);
+    ENFORCE(QMetaObject::invokeMethod(q, "accountsUpdated", Qt::QueuedConnection, Q_ARG(QMailAccountIdList, QMailAccountIdList() << qId)));
+}
+
+bool QMailStorePrivate::accountValid(Accounts::AccountId id) const
+{
+    QSharedPointer<Accounts::Account> account(manager->account(id));
+
+    if (!account) {
+        SSOHandleError(manager->lastError());
+        return false;
+    }
+
+    // Account should already have the type "e-mail",
+    // ignore extra checks
+
+
+    return true;
+}
+
+void QMailStorePrivate::disconnectIpc()
+{
+    QMailStoreImplementation::disconnectIpc();
+
+    ipcLastDbUpdated = QMail::lastDbUpdated();
+}
+
+void QMailStorePrivate::reconnectIpc()
+{
+    QMailStoreImplementation::reconnectIpc();
+
+    // clear cache if needed
+    const QDateTime& lastDbUpdated = QMail::lastDbUpdated();
+    if (ipcLastDbUpdated != lastDbUpdated) {
+        // Clear all caches
+        accountCache.clear();
+        folderCache.clear();
+        messageCache.clear();
+        uidCache.clear();
+        threadCache.clear();
+
+        ipcLastDbUpdated = lastDbUpdated;
+    }
+}
+#endif

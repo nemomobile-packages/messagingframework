@@ -12,6 +12,24 @@ equals(QT_MAJOR_VERSION, 5) {
 }
 
 QT = core network
+
+contains(DEFINES,USE_ACCOUNTS_QT) {
+    CONFIG += link_pkgconfig
+    QT += xml
+    equals(QT_MAJOR_VERSION, 4) {
+        # accounts dependencies
+        PKGCONFIG += accounts-qt
+        # sso dependencies
+        PKGCONFIG += libsignon-qt
+    }
+    equals(QT_MAJOR_VERSION, 5) {
+        # accounts dependencies
+        PKGCONFIG += accounts-qt5
+        # sso dependencies
+        PKGCONFIG += libsignon-qt5
+    }
+}
+
 DEPENDPATH += .
 
 INCLUDEPATH += . ../../../libraries/qmfclient \

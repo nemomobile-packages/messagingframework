@@ -349,30 +349,36 @@ void QMailAccountListModel::accountsAdded(const QMailAccountIdList& ids)
     { 
         foreach(const QMailAccountId &id,results)
         {
-            LessThanFunctorA lessThan(d->sortKey);
+            if (!d->idList.contains(id)) {
+                LessThanFunctorA lessThan(d->sortKey);
 
-            //if sorting the list fails, then resort to a complete refresh
-            if(lessThan.invalidatedList())
-                fullRefresh();
-            else
-            {
-                QMailAccountIdList::iterator itr = d->lowerBound(id, lessThan);
-                int newIndex = (itr - d->idList.begin());
+                //if sorting the list fails, then resort to a complete refresh
+                if (lessThan.invalidatedList())
+                    fullRefresh();
+                else
+                {
+                    QMailAccountIdList::iterator itr = d->lowerBound(id, lessThan);
+                    int newIndex = (itr - d->idList.begin());
 
-                beginInsertRows(QModelIndex(),newIndex,newIndex);
-                d->idList.insert(itr, id);
-                endInsertRows();
+                    beginInsertRows(QModelIndex(),newIndex,newIndex);
+                    d->idList.insert(itr, id);
+                    endInsertRows();
+                }
+            } else {
+                qWarning() << "QMailAccountListModel: Account with the same id already present in the model";
             }
         }
-    }
-    else
-    {
-        int index = d->idList.count();
-
-        beginInsertRows(QModelIndex(),index,(index + results.count() - 1));
-        foreach(const QMailAccountId &id,results)
-            d->idList.append(id);
-        endInsertRows();
+    } else {
+        foreach (const QMailAccountId &id,results) {
+            if (!d->idList.contains(id)) {
+                int index = d->idList.count();
+                beginInsertRows(QModelIndex(),index,(index + results.count() - 1));
+                d->idList.append(id);
+                endInsertRows();
+            } else {
+                qWarning() << "QMailAccountListModel: Account with the same id already present in the model";
+            }
+        }
     }
     d->needSynchronize = false;
 }

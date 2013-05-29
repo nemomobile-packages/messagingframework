@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2013 Jolla Ltd.
+** Contact: Valério Valério <valerio.valerio@jollamobile.com>
 **
 ** This file is part of the Qt Messaging Framework.
 **
@@ -39,25 +39,36 @@
 **
 ****************************************************************************/
 
-#ifndef POPAUTHENTICATOR_H
-#define POPAUTHENTICATOR_H
+#ifndef SSOAUTHPLUGIN_H
+#define SSOAUTHPLUGIN_H
 
-#include <qmailaccountconfiguration.h>
+#include "qmailglobal.h"
+#include <QObject>
+#include <QString>
+#include <QVariantMap>
+#include <SignOn/SessionData>
 
-#include <QByteArray>
-#include <QStringList>
-
-class PopAuthenticator
+class QMF_EXPORT SSOAuthService : public QObject
 {
+    Q_OBJECT
+
 public:
-    static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#ifdef USE_ACCOUNTS_QT
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
-#else
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#endif
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
+    SSOAuthService(QObject* parent = 0);
+    ~SSOAuthService();
+
+    virtual QString key() const = 0;
+    virtual QList<QByteArray> authentication(const SignOn::SessionData &sessionData,
+                                         const QString &serviceType, const QString &userName, int serviceAuthentication) const = 0;
+    virtual SignOn::SessionData sessionData(const QString &accountProvider, QVariantMap authParameters,
+                                            bool setUiPolicy) const = 0;
+    virtual SSOAuthService *createService() = 0;
 };
 
-#endif
+class QMF_EXPORT SSOAuthFactory
+{
+public:
+    static QStringList keys();
+    static SSOAuthService *createService(const QString& key);
+};
 
+#endif // SSOAUTHPLUGIN_H

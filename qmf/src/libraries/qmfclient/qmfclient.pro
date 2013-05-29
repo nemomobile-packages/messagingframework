@@ -95,7 +95,6 @@ PRIVATE_HEADERS += bind_p.h \
 
 HEADERS += $$PUBLIC_HEADERS $$PRIVATE_HEADERS
 
-
 SOURCES += longstream.cpp \
            longstring.cpp \
            qmailaccount.cpp \
@@ -171,17 +170,35 @@ TRANSLATIONS += libqtopiamail-ar.ts \
                 libqtopiamail-zh_CN.ts \
                 libqtopiamail-zh_TW.ts
 
-equals(QT_MAJOR_VERSION, 4): header_files.path=$$QMF_INSTALL_ROOT/include/qmfclient
-equals(QT_MAJOR_VERSION, 5): header_files.path=$$QMF_INSTALL_ROOT/include/qmfclient5
-header_files.files=$$PUBLIC_HEADERS
+packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
+    PRIVATE_HEADERS += \
+               ssoaccountmanager.h
 
-INSTALLS += header_files
+    PUBLIC_HEADERS += \
+               ssosessionmanager.h \
+               ssoauthplugin.h
 
-unix: {
-	CONFIG += create_pc create_prl
-	QMAKE_PKGCONFIG_LIBDIR  = $$target.path
-	QMAKE_PKGCONFIG_INCDIR  = $$header_files.path
-	QMAKE_PKGCONFIG_DESTDIR = pkgconfig
+    # For Qtc
+    HEADERS += ssoaccountmanager.h \
+               ssosessionmanager.h \
+               ssoauthplugin.h
+
+    SOURCES += ssoaccountmanager.cpp \
+               ssosessionmanager.cpp \
+               ssoauthplugin.cpp
+
+    # THIS NEEDS TO BE CHECKED
+    # Install generic SSO provider description
+    sso_providers.files = share/GenericProvider.provider
+    sso_providers.path  = $$QMF_INSTALL_ROOT/share/accounts/providers
+
+    # Install generic SSO service description
+    sso_services.files = share/GenericEmail.service
+    sso_services.path  = $$QMF_INSTALL_ROOT/share/accounts/services
+
+    INSTALLS += sso_providers sso_services
+} else {
+     warning("Accounts-qt support requires accounts-qt")
 }
 
 packagesExist(icu-uc) {
@@ -193,5 +210,18 @@ packagesExist(icu-uc) {
 } else {
     warning("icu not available, not doing character set detection")
 }
+
+equals(QT_MAJOR_VERSION, 4): header_files.path=$$QMF_INSTALL_ROOT/include/qmfclient
+equals(QT_MAJOR_VERSION, 5): header_files.path=$$QMF_INSTALL_ROOT/include/qmfclient5
+header_files.files=$$PUBLIC_HEADERS
+
+unix: {
+        CONFIG += create_pc create_prl
+        QMAKE_PKGCONFIG_LIBDIR  = $$target.path
+        QMAKE_PKGCONFIG_INCDIR  = $$header_files.path
+        QMAKE_PKGCONFIG_DESTDIR = pkgconfig
+}
+
+INSTALLS += header_files
 
 include(../../../common.pri)

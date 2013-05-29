@@ -109,6 +109,9 @@ private:
 
 bool PopService::Source::retrieveFolderList(const QMailAccountId &accountId, const QMailFolderId &folderId, bool descending)
 {
+    if (!_service)
+        return false;
+
     if (!accountId.isValid()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No account specified"));
         return false;
@@ -131,6 +134,8 @@ bool PopService::Source::retrieveFolderList(const QMailAccountId &accountId, con
 
 bool PopService::Source::retrieveMessageLists(const QMailAccountId &accountId, const QMailFolderIdList &folderIds, uint minimum, const QMailMessageSortKey &sort)
 {
+    if (!_service)
+        return false;
     if (folderIds.isEmpty()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No folders specified"));
         return false;
@@ -141,6 +146,9 @@ bool PopService::Source::retrieveMessageLists(const QMailAccountId &accountId, c
 
 bool PopService::Source::retrieveMessageList(const QMailAccountId &accountId, const QMailFolderId &folderId, uint minimum, const QMailMessageSortKey &sort)
 {
+    if (!_service)
+        return false;
+
     if (!accountId.isValid()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No account specified"));
         return false;
@@ -171,6 +179,9 @@ bool PopService::Source::retrieveMessageList(const QMailAccountId &accountId, co
 
 bool PopService::Source::retrieveMessages(const QMailMessageIdList &messageIds, QMailRetrievalAction::RetrievalSpecification spec)
 {
+    if (!_service)
+        return false;
+
     if (messageIds.isEmpty()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No messages to retrieve"));
         return false;
@@ -197,6 +208,9 @@ bool PopService::Source::retrieveMessages(const QMailMessageIdList &messageIds, 
 
 bool PopService::Source::retrieveAll(const QMailAccountId &accountId)
 {
+    if (!_service)
+        return false;
+
     if (!accountId.isValid()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No account specified"));
         return false;
@@ -210,6 +224,9 @@ bool PopService::Source::retrieveAll(const QMailAccountId &accountId)
 
 bool PopService::Source::exportUpdates(const QMailAccountId &accountId)
 {
+    if (!_service)
+        return false;
+
     if (!accountId.isValid()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No account specified"));
         return false;
@@ -227,6 +244,9 @@ bool PopService::Source::synchronize(const QMailAccountId &accountId)
 
 bool PopService::Source::deleteMessages(const QMailMessageIdList &messageIds)
 {
+    if (!_service)
+        return false;
+
     if (messageIds.isEmpty()) {
         _service->errorOccurred(QMailServiceAction::Status::ErrInvalidData, tr("No messages to delete"));
         return false;
@@ -332,6 +352,11 @@ PopService::PopService(const QMailAccountId &accountId)
 
 PopService::~PopService()
 {
+#ifdef USE_ACCOUNTS_QT
+    //If account was deleted, we should remove appropriate signon identity from the signon.db
+    if (!accountId().isValid())
+        _client.removeSsoIdentity(accountId());
+#endif
     delete _source;
 }
 

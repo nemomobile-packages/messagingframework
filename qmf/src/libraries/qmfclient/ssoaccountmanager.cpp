@@ -39,25 +39,28 @@
 **
 ****************************************************************************/
 
-#ifndef POPAUTHENTICATOR_H
-#define POPAUTHENTICATOR_H
+#include "ssoaccountmanager.h"
 
-#include <qmailaccountconfiguration.h>
+using namespace Accounts;
 
-#include <QByteArray>
-#include <QStringList>
+Manager* SSOAccountManager::_manager = 0;
+int SSOAccountManager::_refCount = 0;
 
-class PopAuthenticator
+SSOAccountManager::SSOAccountManager()
 {
-public:
-    static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#ifdef USE_ACCOUNTS_QT
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
-#else
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#endif
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
-};
+    if (!_manager) {
+        Q_ASSERT(!_refCount);
+        _manager = new Manager("e-mail");
+        _manager->setAbortOnTimeout(true);
+    }
 
-#endif
+    ++_refCount;
+}
 
+SSOAccountManager::~SSOAccountManager()
+{
+    if (--_refCount == 0) {
+        delete _manager;
+        _manager = 0;
+    }
+}

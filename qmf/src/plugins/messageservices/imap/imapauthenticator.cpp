@@ -47,6 +47,7 @@
 #include <qmailauthenticator.h>
 #include <qmailtransport.h>
 #include <qmailnamespace.h>
+#include <qmaillog.h>
 
 namespace {
 
@@ -77,7 +78,34 @@ bool ImapAuthenticator::useEncryption(const QMailAccountConfiguration::ServiceCo
     return QMailAuthenticator::useEncryption(svcCfg, capabilities);
 #endif
 }
+#ifdef USE_ACCOUNTS_QT
+QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QByteArray &ssoLogin)
+{
+    QString _password;
+    QByteArray result(QMailAuthenticator::getAuthentication(svcCfg, capabilities));
+    if (!result.isEmpty())
+        return QByteArray("AUTHENTICATE ") + result;
 
+    // If not handled by the authenticator, fall back to login
+    ImapConfiguration imapCfg(svcCfg);
+    if (ssoLogin.isEmpty()) {
+        _password = imapCfg.mailPassword();
+        qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< imapCfg.id()
+                       << ", using password from accounts configuration";
+    } else {
+        return ssoLogin;
+    }
+
+    if (imapCfg.mailAuthentication() == QMail::PlainMechanism) {
+        QByteArray username(imapCfg.mailUserName().toLatin1());
+        QByteArray pass(_password.toLatin1());
+        return QByteArray("AUTHENTICATE PLAIN ") + QByteArray(username + '\0' + username + '\0' + pass).toBase64();
+    }
+
+    return QByteArray("LOGIN") + ' ' + ImapProtocol::quoteString(imapCfg.mailUserName().toLatin1())
+                               + ' ' + ImapProtocol::quoteString(_password.toLatin1());
+}
+#else
 QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
     QByteArray result(QMailAuthenticator::getAuthentication(svcCfg, capabilities));
@@ -95,6 +123,7 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
     return QByteArray("LOGIN") + ' ' + ImapProtocol::quoteString(imapCfg.mailUserName().toLatin1())
                                + ' ' + ImapProtocol::quoteString(imapCfg.mailPassword().toLatin1());
 }
+#endif
 
 QByteArray ImapAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {

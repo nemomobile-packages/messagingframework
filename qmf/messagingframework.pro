@@ -12,22 +12,24 @@ SUBDIRS = src/libraries/qmfclient \
           tests
 
 !contains(DEFINES,QMF_NO_MESSAGE_SERVICE_EDITOR) {
+    SUBDIRS += \
+              examples/qtmail/libs/qmfutil \
+              examples/qtmail/app \
+              examples/qtmail/plugins/viewers/generic \
+              examples/qtmail/plugins/composers/email \
+              examples/messagingaccounts \
+              examples/serverobserver
 
-SUBDIRS += \
-          examples/qtmail/libs/qmfutil \
-          examples/qtmail/app \
-          examples/qtmail/plugins/viewers/generic \
-          examples/qtmail/plugins/composers/email \
-          examples/messagingaccounts \
-          examples/serverobserver
-          
-# disable benchmark test on mac until ported
-!macx {
-    !SERVER_AS_DLL {
-          SUBDIRS += benchmarks
+    # disable benchmark test on mac until ported
+    !macx {
+        !SERVER_AS_DLL {
+              SUBDIRS += benchmarks
+        }
     }
 }
 
+packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
+    SUBDIRS += src/plugins/ssoauth/password
 }
 
 defineReplace(targetPath) {
@@ -41,8 +43,8 @@ dox.depends =
 
 QMAKE_EXTRA_TARGETS += dox
 
-include(doc/src/doc.pri)
-
 !unix {
      warning("IMAP COMPRESS capability is currently not supported on non unix platforms")
 }
+
+include(doc/src/doc.pri)

@@ -118,6 +118,9 @@ void tst_QMailStore::cleanupTestCase()
 
 void tst_QMailStore::addAccount()
 {
+
+    QSignalSpy spyAccountAdded(QMailStore::instance(), SIGNAL(accountsAdded(QMailAccountIdList)));
+
     QMailAccount account1;
     account1.setName("Account 1");
     account1.setFromAddress(QMailAddress("Account 1", "account1@example.org"));
@@ -154,6 +157,9 @@ void tst_QMailStore::addAccount()
     QVERIFY(account1.id().isValid());
     QCOMPARE(QMailStore::instance()->countAccounts(), 1);
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+
+    // Verify that the addAccount signal is emitted only once
+    QCOMPARE(spyAccountAdded.count(), 1);
 
     // Verify that retrieval yields matching result
     QMailAccount account2(account1.id());
@@ -1224,6 +1230,8 @@ void tst_QMailStore::updateMessages()
 
 void tst_QMailStore::removeAccount()
 {
+    QSignalSpy spyAccountRemoved(QMailStore::instance(), SIGNAL(accountsRemoved(QMailAccountIdList)));
+
     QMailAccount account1;
     account1.setName("Account 1");
     account1.setFromAddress(QMailAddress("Account 1", "account1@example.org"));
@@ -1278,6 +1286,9 @@ void tst_QMailStore::removeAccount()
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
     QCOMPARE(QMailStore::instance()->countAccounts(), 0);
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+
+    // Verify that the removeAccount signal is emitted only once
+    QCOMPARE(spyAccountRemoved.count(), 1);
 
     // Verify that retrieval yields invalid result
     QMailAccount account3(account1.id());

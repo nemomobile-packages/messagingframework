@@ -100,6 +100,26 @@ static QByteArray localName()
     return "localhost.localdomain";
 }
 
+#ifdef USE_ACCOUNTS_QT
+SmtpClient::SmtpClient(QObject* parent)
+    : QObject(parent)
+    , mailItr(mailList.end())
+    , messageLength(0)
+    , sending(false)
+    , transport(0)
+    , temporaryFile(0)
+    , waitingForBytes(0)
+    , notUsingAuth(false)
+    , authTimeout(0)
+    , ssoSessionManager(0)
+    , loginFailed(false)
+    , sendLogin(false)
+    , accountUpdated(false)
+{
+    connect(QMailStore::instance(), SIGNAL(accountsUpdated(const QMailAccountIdList&)),
+            this, SLOT(accountsUpdated(const QMailAccountIdList&)));
+}
+#else
 SmtpClient::SmtpClient(QObject* parent)
     : QObject(parent)
     , mailItr(mailList.end())
@@ -114,12 +134,17 @@ SmtpClient::SmtpClient(QObject* parent)
     connect(QMailStore::instance(), SIGNAL(accountsUpdated(const QMailAccountIdList&)), 
             this, SLOT(accountsUpdated(const QMailAccountIdList&)));
 }
+#endif
 
 SmtpClient::~SmtpClient()
 {
     delete transport;
     delete temporaryFile;
     delete authTimeout;
+#ifdef USE_ACCOUNTS_QT
+    if (ssoSessionManager)
+        ssoSessionManager->deleteSsoIdentity();
+#endif
 }
 
 void SmtpClient::accountsUpdated(const QMailAccountIdList &ids)
@@ -131,6 +156,7 @@ void SmtpClient::accountsUpdated(const QMailAccountIdList &ids)
     bool isEnabled(acc.status() & QMailAccount::Enabled);
     if (!isEnabled)
         return;
+    accountUpdated = true;
     setAccount(account());
 }
 
@@ -143,6 +169,22 @@ void SmtpClient::setAccount(const QMailAccountId &id)
 {
     // Load the current configuration for this account
     config = QMailAccountConfiguration(id);
+#ifdef USE_ACCOUNTS_QT
+    if (!ssoSessionManager) {
+        SmtpConfiguration smtpCfg(config);
+        ssoSessionManager = new SSOSessionManager(this);
+        if (ssoSessionManager->createSsoIdentity(id, "smtp", smtpCfg.smtpAuthentication())) {
+            ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionResponse(QList<QByteArray>))
+                            ,this, SLOT(onSsoSessionResponse(QList<QByteArray>))));
+            ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionError(QString)),this, SLOT(onSsoSessionError(QString))));
+            qMailLog(SMTP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
+        } else {
+            delete ssoSessionManager;
+            qMailLog(SMTP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
+                           << ", accounts configuration will be used";
+        }
+    }
+#endif
 }
 
 QMailAccountId SmtpClient::account() const
@@ -153,6 +195,9 @@ QMailAccountId SmtpClient::account() const
 void SmtpClient::newConnection()
 {
     qMailLog(SMTP) << "newConnection" << flush;
+#ifdef USE_ACCOUNTS_QT
+    loginFailed = false;
+#endif
     if (sending) {
         operationFailed(QMailServiceAction::Status::ErrConnectionInUse, tr("Cannot send message; transport in use"));
         return;
@@ -163,6 +208,12 @@ void SmtpClient::newConnection()
         operationFailed(QMailServiceAction::Status::ErrConfiguration, tr("Cannot send message without account configuration"));
         return;
     }
+
+    // Load the current configuration for this account
+    // Reload the account configuration whenever a new SMTP
+    // connection is created, in order to ensure the changes
+    // in the account settings are being managed properly.
+    config = QMailAccountConfiguration(config.id());
 
     SmtpConfiguration smtpCfg(config);
     if ( smtpCfg.smtpServer().isEmpty() ) {
@@ -312,9 +363,7 @@ void SmtpClient::sendCommand(const char *data, int len)
 
     ++outstandingResponses;
 
-    if (len) {
-        qMailLog(SMTP) << "SEND:" << data;
-    }
+    qMailLog(SMTP) << "SEND:" << data;
 }
 
 void SmtpClient::sendCommand(const QString &cmd)
@@ -516,6 +565,31 @@ void SmtpClient::nextAction(const QString &response)
         addressComponent = localAddress.toIPv4Address();
 
         // Find the authentication mode to use
+#ifdef USE_ACCOUNTS_QT
+        if (ssoSessionManager) {
+            // start single signon session
+            status = SignOnSession;
+            nextAction(QString());
+        } else {
+            // Use credentials from accounts db
+            // Find the authentication mode to use
+            ssoLogin.clear();
+            QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
+            if (!authCmd.isEmpty()) {
+                sendCommand(authCmd);
+                status = Authenticating;
+            } else {
+                foreach (QString const& capability, capabilities) {
+                    if (capability.startsWith("AUTH", Qt::CaseInsensitive)) {
+                        notUsingAuth = true;
+                        break;
+                    }
+                }
+                status = Authenticated;
+                nextAction(QString());
+            }
+        }
+#else
         QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities));
         if (!authCmd.isEmpty()) {
             sendCommand(authCmd);
@@ -530,8 +604,30 @@ void SmtpClient::nextAction(const QString &response)
             status = Authenticated;
             nextAction(QString());
         }
+#endif
         break;
     }
+#ifdef USE_ACCOUNTS_QT
+    case SignOnSession:
+    {
+        if (loginFailed) {
+            if (ssoSessionManager) {
+                sendLogin = true;
+                ssoSessionManager->recreateSsoIdentity(!accountUpdated);
+            } else
+                operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+        } else {
+            if (!ssoSessionManager->waitForSso()) {
+                QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
+                sendCommand(authCmd);
+                status = Authenticating;
+            } else {
+                sendLogin = true;
+            }
+        }
+        break;
+    }
+#endif
     case Authenticating:
     {
         if (responseCode == 334) {
@@ -545,8 +641,9 @@ void SmtpClient::nextAction(const QString &response)
                 bufferedResponse.clear();
                 return;
             } else {
-                // No username/password defined
-                operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+                // Challenge response is empty
+                // send a empty response.
+                sendCommand("");
             }
         } else if (responseCode == 235) {
             // We are now authenticated
@@ -555,14 +652,26 @@ void SmtpClient::nextAction(const QString &response)
         } else if (responseCode == 530) {
             operationFailed(QMailServiceAction::Status::ErrConfiguration, response);
         } else {
+#ifdef USE_ACCOUNTS_QT
+            if (!loginFailed) {
+                loginFailed = true;
+                status = SignOnSession;
+                nextAction(QString());
+            } else {
+                operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+            }
+#else
             operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+#endif
         }
-
         // Otherwise, we're authenticated
         break;
     }
     case Authenticated:
     {
+#ifdef USE_ACCOUNTS_QT
+        loginFailed = false;
+#endif
         if (mailItr == mailList.end()) {
             // Nothing to send
             status = Quit;
@@ -816,6 +925,10 @@ void SmtpClient::nextAction(const QString &response)
 void SmtpClient::cancelTransfer(QMailServiceAction::Status::ErrorCode code, const QString &text)
 {
     operationFailed(code, text);
+#ifdef USE_ACCOUNTS_QT
+    if (ssoSessionManager)
+        ssoSessionManager->cancel();
+#endif
 }
 
 void SmtpClient::messageProcessed(const QMailMessageId &id)
@@ -970,3 +1083,40 @@ void SmtpClient::stopTransferring()
         status = Sent;
     }
 }
+
+#ifdef USE_ACCOUNTS_QT
+void SmtpClient::removeSsoIdentity(const QMailAccountId &accountId)
+{
+    if (config.id() == accountId) {
+        if (ssoSessionManager) {
+            ssoSessionManager->removeSsoIdentity();
+            delete ssoSessionManager;
+        }
+    }
+}
+
+void SmtpClient::onSsoSessionResponse(const QList<QByteArray> &ssoCredentials)
+{
+    qMailLog(SMTP)  << "Got SSO response";
+    if(!ssoCredentials.isEmpty()) {
+        ssoLogin = ssoCredentials;
+        if (accountUpdated)
+            accountUpdated = false;
+        if (sendLogin) {
+            sendLogin = false;
+            QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
+            sendCommand(authCmd);
+            status = Authenticating;
+        }
+    }
+}
+
+void SmtpClient::onSsoSessionError(const QString &error)
+{
+    // Reset vars
+    loginFailed = false;
+    sendLogin = false;
+    qMailLog(SMTP) <<  "Got SSO error:" << error;
+    operationFailed(QMailServiceAction::Status::ErrLoginFailed, error);
+}
+#endif

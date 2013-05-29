@@ -39,25 +39,37 @@
 **
 ****************************************************************************/
 
-#ifndef POPAUTHENTICATOR_H
-#define POPAUTHENTICATOR_H
+#ifndef SSOACCOUNTMANAGER_H
+#define SSOACCOUNTMANAGER_H
 
-#include <qmailaccountconfiguration.h>
+#include <qglobal.h>
+#include "qmailglobal.h"
 
-#include <QByteArray>
-#include <QStringList>
+// Accounts
+#include <Accounts/Manager>
 
-class PopAuthenticator
+/// Accounts::Manager wrapper.
+class QMF_EXPORT SSOAccountManager
 {
 public:
-    static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#ifdef USE_ACCOUNTS_QT
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
-#else
-    static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#endif
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
+    SSOAccountManager();
+    ~SSOAccountManager();
+
+    Accounts::Manager* operator ->() const
+    {
+        Q_ASSERT (_manager);
+        return _manager;
+    }
+
+    operator Accounts::Manager*() const
+    {
+        Q_ASSERT (_manager);
+        return _manager;
+    }
+
+private:
+    Q_DISABLE_COPY (SSOAccountManager);
+    static Accounts::Manager* _manager;
+    static int _refCount;
 };
-
-#endif
-
+#endif // SSOACCOUNTMANAGER_H

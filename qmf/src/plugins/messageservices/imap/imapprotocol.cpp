@@ -543,8 +543,11 @@ class LoginState : public ImapState
 public:
     LoginState() : ImapState(IMAP_Login, "Login") { LoginState::init(); }
 
+#ifdef USE_ACCOUNTS_QT
+    void setConfiguration(const QMailAccountConfiguration &config, const QStringList &capabilities, const QByteArray &ssoLogin);
+#else
     void setConfiguration(const QMailAccountConfiguration &config, const QStringList &capabilities);
-
+#endif
     virtual void init();
     virtual QString transmit(ImapContext *c);
     virtual bool continuationResponse(ImapContext *c, const QString &line);
@@ -553,24 +556,43 @@ public:
 private:
     QMailAccountConfiguration _config;
     QStringList _capabilities;
+#ifdef USE_ACCOUNTS_QT
+    QByteArray _ssoLogin;
+#endif
 };
 
+#ifdef USE_ACCOUNTS_QT
+void LoginState::setConfiguration(const QMailAccountConfiguration &config, const QStringList &capabilities, const QByteArray &ssoLogin)
+{
+    _config = config;
+    _capabilities = capabilities;
+    _ssoLogin = ssoLogin;
+}
+#else
 void LoginState::setConfiguration(const QMailAccountConfiguration &config, const QStringList &capabilities)
 {
     _config = config;
     _capabilities = capabilities;
 }
+#endif
 
 void LoginState::init()
 {
     ImapState::init();
     _config = QMailAccountConfiguration();
     _capabilities = QStringList();
+#ifdef USE_ACCOUNTS_QT
+    _ssoLogin = QByteArray();
+#endif
 }
 
 QString LoginState::transmit(ImapContext *c)
 {
+#ifdef USE_ACCOUNTS_QT
+    return c->sendCommand(ImapAuthenticator::getAuthentication(_config.serviceConfiguration("imap4"), _capabilities, _ssoLogin));
+#else
     return c->sendCommand(ImapAuthenticator::getAuthentication(_config.serviceConfiguration("imap4"), _capabilities));
+#endif
 }
 
 bool LoginState::continuationResponse(ImapContext *c, const QString &received)
@@ -578,9 +600,12 @@ bool LoginState::continuationResponse(ImapContext *c, const QString &received)
     // The server input is Base64 encoded
     QByteArray challenge = QByteArray::fromBase64(received.toLatin1());
     QByteArray response(ImapAuthenticator::getResponse(_config.serviceConfiguration("imap4"), challenge));
-
     if (!response.isEmpty()) {
         c->sendData(response.toBase64());
+    } else {
+        // Challenge response is empty
+        // send a empty response.
+        c->sendData("");
     }
 
     return false;
@@ -3025,11 +3050,19 @@ void ImapProtocol::sendStartTLS()
     _fsm->setState(&_fsm->startTlsState);
 }
 
+#ifdef USE_ACCOUNTS_QT
+void ImapProtocol::sendLogin(const QMailAccountConfiguration &config , const QByteArray &ssoLogin)
+{
+    _fsm->loginState.setConfiguration(config, _capabilities, ssoLogin);
+    _fsm->setState(&_fsm->loginState);
+}
+#else
 void ImapProtocol::sendLogin( const QMailAccountConfiguration &config )
 {
     _fsm->loginState.setConfiguration(config, _capabilities);
     _fsm->setState(&_fsm->loginState);
 }
+#endif
 
 void ImapProtocol::sendLogout()
 {
@@ -3596,7 +3629,7 @@ QString ImapProtocol::quoteString(const QString& input)
 
 QByteArray ImapProtocol::quoteString(const QByteArray& input)
 {
-    return quoteString(QString(input)).toLatin1();
+    return quoteString(QString::fromLatin1(input)).toLatin1();
 }
 
 void ImapProtocol::createMail(const QString &uid, const QDateTime &timeStamp, int size, uint flags, const QString &detachedFile, const QStringList& structure)
