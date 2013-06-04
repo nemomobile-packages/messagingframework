@@ -24,6 +24,7 @@ PkgConfigBR:
     - QtGui
     - accounts-qt
     - libsignon-qt
+SetupOptions: -q -n %{name}-%{version}/qmf
 Configure: none
 Builder: qmake
 QMakeOptions:

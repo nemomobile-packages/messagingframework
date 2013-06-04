@@ -154,7 +154,7 @@ This package contains the documentation for Qt Messaging Framework (QMF).
 
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n %{name}-%{version}/qmf
 
 # fix_tests_installation.patch
 %patch0 -p1

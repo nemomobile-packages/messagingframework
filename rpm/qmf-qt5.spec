@@ -152,7 +152,7 @@ that interacts with email and mail servers.
 This package contains the documentation for Qt Messaging Framework (QMF).
 
 %prep
-%setup -q -n %{_name}-%{version}
+%setup -q -n %{_name}-%{version}/qmf
 
 # fix_tests_installation.patch
 %patch0 -p1
