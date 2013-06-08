@@ -15,7 +15,6 @@ Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
 URL:        http://qt.gitorious.org/qt-labs/messagingframework
 Source0:    %{name}-%{version}.tar.bz2
-Source100:  qmf.yaml
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(icu-i18n)
 BuildRequires:  pkgconfig(QtGui)

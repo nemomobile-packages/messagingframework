@@ -1,4 +1,3 @@
-%define _name qmf
 Name: qmf-qt5
 Summary:    Qt Messaging Framework (QMF) Qt5
 Version:    4.0.0
@@ -6,7 +5,7 @@ Release:    1
 Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
 URL:        http://qt.gitorious.org/qt-labs/messagingframework
-Source0:    %{_name}-%{version}.tar.bz2
+Source0:    %{name}-%{version}.tar.bz2
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(icu-i18n)
 BuildRequires:  pkgconfig(Qt5Core)
@@ -149,7 +148,7 @@ that interacts with email and mail servers.
 This package contains the documentation for Qt Messaging Framework (QMF).
 
 %prep
-%setup -q -n %{_name}-%{version}/qmf
+%setup -q -n %{name}-%{version}/qmf
 # >> setup
 # << setup
 
