@@ -7,9 +7,6 @@ Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
 URL:        http://qt.gitorious.org/qt-labs/messagingframework
 Source0:    %{_name}-%{version}.tar.bz2
-Patch0:     fix_tests_installation.patch
-Patch1:     fix_docs_installation.patch
-Patch2:     accounts-qt-integration.patch
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(icu-i18n)
 BuildRequires:  pkgconfig(Qt5Core)
@@ -153,13 +150,6 @@ This package contains the documentation for Qt Messaging Framework (QMF).
 
 %prep
 %setup -q -n %{_name}-%{version}/qmf
-
-# fix_tests_installation.patch
-%patch0 -p1
-# fix_docs_installation.patch
-%patch1 -p1
-# accounts-qt-integration.patch
-%patch2 -p1
 # >> setup
 # << setup
 
@@ -181,7 +171,7 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 # >> install pre
 # << install pre
-%qmake_install
+%qmake5_install
 
 # >> install post
 # << install post

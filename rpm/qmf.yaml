@@ -7,11 +7,6 @@ License: LGPLv2.1 with exception or GPLv3
 URL: http://qt.gitorious.org/qt-labs/messagingframework
 Sources:
     - "%{name}-%{version}.tar.bz2"
-Patches:
-    - fix_tests_installation.patch
-    - fix_docs_installation.patch
-    - accounts-qt-integration.patch
-
 Description: |
     The Qt Messaging Framework, QMF, consists of a C++ library and daemon server
     process that can be used to build email clients, and more generally software
