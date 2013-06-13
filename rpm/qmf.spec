@@ -9,7 +9,7 @@ Name:       qmf
 # << macros
 
 Summary:    Qt Messaging Framework (QMF)
-Version:    4.0.0
+Version:    4.0.1
 Release:    1
 Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
