@@ -161,7 +161,8 @@ This package contains the documentation for Qt Messaging Framework (QMF).
 %qmake  \
     QMF_INSTALL_ROOT=%{_prefix} \
     DEFINES+=QMF_ENABLE_LOGGING \
-    CONFIG+=syslog
+    DEFINES+=MESSAGESERVER_PLUGINS \
+    CONFIG+=syslog 
 
 make %{?jobs:-j%jobs}
 
