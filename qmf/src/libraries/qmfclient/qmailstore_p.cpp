@@ -6044,7 +6044,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccou
     }
 
     // Create new account in Accounts subsystem
-    QSharedPointer<Accounts::Account> ssoAccount(manager->createAccount("GenericProvider"));
+    QSharedPointer<Accounts::Account> ssoAccount(manager->createAccount("email"));
     if (!ssoAccount) {
         SSOHandleError(manager->lastError());
         qMailLog(Messaging) << "Failed to create account";

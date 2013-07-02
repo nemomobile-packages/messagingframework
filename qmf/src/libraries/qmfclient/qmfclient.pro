@@ -187,12 +187,12 @@ packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
                ssoauthplugin.cpp
 
     # THIS NEEDS TO BE CHECKED
-    # Install generic SSO provider description
-    sso_providers.files = share/GenericProvider.provider
+    # Install email SSO provider description
+    sso_providers.files = share/email.provider
     sso_providers.path  = $$QMF_INSTALL_ROOT/share/accounts/providers
 
-    # Install generic SSO service description
-    sso_services.files = share/GenericEmail.service
+    # Install email SSO service description
+    sso_services.files = share/email.service
     sso_services.path  = $$QMF_INSTALL_ROOT/share/accounts/services
 
     INSTALLS += sso_providers sso_services
