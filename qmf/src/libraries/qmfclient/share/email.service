@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<service id="GenericEmail">
+<service id="email">
   <type>e-mail</type>
-  <name>Other mail account</name>
-  <icon>generic_email</icon>
-  <provider>GenericProvider</provider>
+  <name>Email Service</name>
+  <provider>email</provider>
 
   <!-- default settings (account settings have precedence over these) -->
   <template>
