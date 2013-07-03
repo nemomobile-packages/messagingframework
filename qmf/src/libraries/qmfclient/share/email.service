@@ -2,6 +2,7 @@
 <service id="email">
   <type>e-mail</type>
   <name>Email Service</name>
+  <icon>image://theme/icon-m-service-generic-email</icon>
   <provider>email</provider>
 
   <!-- default settings (account settings have precedence over these) -->
