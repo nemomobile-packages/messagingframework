@@ -259,6 +259,7 @@ void PopClient::setAccount(const QMailAccountId &id)
             qMailLog(POP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
         } else {
             delete ssoSessionManager;
+            ssoSessionManager = 0;
             qMailLog(POP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
                           << ", accounts configuration will be used";
         }
@@ -1367,6 +1368,7 @@ void PopClient::removeSsoIdentity(const QMailAccountId &accountId)
         if (ssoSessionManager) {
             ssoSessionManager->removeSsoIdentity();
             delete ssoSessionManager;
+            ssoSessionManager = 0;
         }
     }
 }
