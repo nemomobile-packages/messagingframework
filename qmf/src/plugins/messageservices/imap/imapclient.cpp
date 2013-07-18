@@ -1677,6 +1677,7 @@ void ImapClient::setAccount(const QMailAccountId &id)
              qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
          } else {
              delete _ssoSessionManager;
+             _ssoSessionManager = 0;
              qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
                             << ", accounts configuration will be used";
          }
@@ -1987,6 +1988,7 @@ void ImapClient::removeSsoIdentity(const QMailAccountId &accountId)
         if (_ssoSessionManager) {
             _ssoSessionManager->removeSsoIdentity();
             delete _ssoSessionManager;
+            _ssoSessionManager = 0;
         }
     }
 }

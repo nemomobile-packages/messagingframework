@@ -180,6 +180,7 @@ void SmtpClient::setAccount(const QMailAccountId &id)
             qMailLog(SMTP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
         } else {
             delete ssoSessionManager;
+            ssoSessionManager = 0;
             qMailLog(SMTP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
                            << ", accounts configuration will be used";
         }
@@ -1091,6 +1092,7 @@ void SmtpClient::removeSsoIdentity(const QMailAccountId &accountId)
         if (ssoSessionManager) {
             ssoSessionManager->removeSsoIdentity();
             delete ssoSessionManager;
+            ssoSessionManager = 0;
         }
     }
 }
