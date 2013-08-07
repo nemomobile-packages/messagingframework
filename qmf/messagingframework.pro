@@ -16,10 +16,6 @@ tests.depends = src
     }
 }
 
-packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
-    SUBDIRS += src/plugins/ssoauth/password
-}
-
 defineReplace(targetPath) {
     return($$replace(1, /, $$QMAKE_DIR_SEP))
 }
