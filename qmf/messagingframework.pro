@@ -1,35 +1,19 @@
 TEMPLATE = subdirs
-CONFIG += ordered
+SUBDIRS = src tests
 
-SUBDIRS = src/libraries/qmfclient \
-          src/libraries/qmfmessageserver \
-          src/plugins/messageservices/imap \
-          src/plugins/messageservices/pop \
-          src/plugins/messageservices/smtp \
-          src/plugins/messageservices/qmfsettings \
-          src/plugins/contentmanagers/qmfstoragemanager \
-          src/tools/messageserver \
-          tests
+tests.depends = src
 
 !contains(DEFINES,QMF_NO_MESSAGE_SERVICE_EDITOR) {
-    SUBDIRS += \
-              examples/qtmail/libs/qmfutil \
-              examples/qtmail/app \
-              examples/qtmail/plugins/viewers/generic \
-              examples/qtmail/plugins/composers/email \
-              examples/messagingaccounts \
-              examples/serverobserver
+    SUBDIRS += examples
+    examples.depends = src
 
     # disable benchmark test on mac until ported
     !macx {
         !SERVER_AS_DLL {
-              SUBDIRS += benchmarks
+            SUBDIRS += benchmarks
+            benchmarks.depends = src
         }
     }
-}
-
-packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
-    SUBDIRS += src/plugins/ssoauth/password
 }
 
 defineReplace(targetPath) {
