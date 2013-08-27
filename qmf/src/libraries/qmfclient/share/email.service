@@ -8,7 +8,7 @@
   <!-- default settings (account settings have precedence over these) -->
   <template>
     <setting name="type" type="i">0</setting>
-    <setting name="name">Generic Emai</setting>
+    <setting name="name">Generic Email</setting>
     <setting name="status" type="i">0</setting>
     <setting name="signature"></setting>
     <setting name="emailaddress"></setting>
