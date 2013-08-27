@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <service id="email">
   <type>e-mail</type>
-  <name>Email Service</name>
+  <name>Email</name>
   <icon>image://theme/icon-m-service-generic-email</icon>
   <provider>email</provider>
 
   <!-- default settings (account settings have precedence over these) -->
   <template>
     <setting name="type" type="i">0</setting>
-    <setting name="name">Generic Email Account</setting>
+    <setting name="name">Generic Emai</setting>
     <setting name="status" type="i">0</setting>
     <setting name="signature"></setting>
     <setting name="emailaddress"></setting>
@@ -52,18 +52,4 @@
      </smtp>
      -->
   </template>
-
-  <!-- preview account -->
-  <preview>
-    <parameters>
-      <setting name="server">talkdemo.google.com</setting>
-      <setting name="account">googledemo@gmail.com</setting>
-      <setting name="password">demo</setting>
-    </parameters>
-    <setting name="display_name">GTalk demo</setting>
-  </preview>
-
-  <!-- type-specific data -->
-  <type_data>
-  </type_data>
 </service>
