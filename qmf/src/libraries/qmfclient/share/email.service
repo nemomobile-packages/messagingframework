@@ -13,6 +13,7 @@
     <setting name="signature"></setting>
     <setting name="emailaddress"></setting>
     <setting name="enabled" type="b">false</setting>
+    <setting name="iconPath" type="s">image://theme/icon-m-service-generic-email</setting>
     <group name="auth">
             <setting name="method">password</setting>
             <setting name="mechanism">password</setting>

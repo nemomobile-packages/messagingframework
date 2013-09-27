@@ -3594,6 +3594,9 @@ QMailAccount QMailStorePrivate::extractAccount(const QSharedPointer<Accounts::Ac
     else {
         result.setLastSynchronized(QMailTimeStamp(QDateTime::fromTime_t(static_cast<uint>(ssoAccount->valueAsUInt64("lastSynchronized")))));
     }
+
+    result.setIconPath(ssoAccount->valueAsString("iconPath"));
+
     return result;
 }
 #else
@@ -6084,6 +6087,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccou
     ssoAccount->setValue("fullName", account->fromAddress().name());
     //Account was never synced
     ssoAccount->setValue("lastSynchronized", quint64(0));
+    ssoAccount->setValue("iconPath", account->iconPath());
 
     if (!ssoAccount->syncAndBlock())
         return DatabaseFailure;
@@ -6887,6 +6891,7 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
         }
         bool isDefault = account->status() & QMailAccount::PreferredSender;
         ssoAccount->setValue("email/default", isDefault);
+        ssoAccount->setValue("iconPath", account->iconPath());
 #else
         QString properties("type=?, name=?, emailaddress=?, status=?, signature=?, lastsynchronized=?, iconpath=?");
         QVariantList propertyValues;
