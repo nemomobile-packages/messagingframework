@@ -1,0 +1,14 @@
+[Unit]
+Description=messageserver5
+Requires=booster-generic.service 
+After=booster-generic.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/qmf-accountscheck
+ExecStart=/usr/bin/messageserver5.sh
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=user-session.target
