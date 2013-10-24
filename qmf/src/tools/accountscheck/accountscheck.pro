@@ -6,7 +6,9 @@ QT -= gui
 target.path += /usr/bin
 
 CONFIG += link_pkgconfig
-PKGCONFIG += qmfclient5 accounts-qt5
+PKGCONFIG += accounts-qt5
+LIBS += -lqmfclient5
+LIBS += -L../../libraries/qmfclient/build
 
 SOURCES += accountscheck.cpp
 
