@@ -8,6 +8,7 @@ target.path += /usr/bin
 CONFIG += link_pkgconfig
 PKGCONFIG += accounts-qt5
 LIBS += -lqmfclient5
+LIBS += -L../../libraries/qmfclient/build
 
 SOURCES += accountscheck.cpp
 
