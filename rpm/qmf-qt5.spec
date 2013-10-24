@@ -6,6 +6,7 @@ Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
 URL:        http://qt.gitorious.org/qt-labs/messagingframework
 Source0:    %{name}-%{version}.tar.bz2
+Requires:   systemd-user-session-targets
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(icu-i18n)
 BuildRequires:  pkgconfig(Qt5Core)
@@ -172,6 +173,9 @@ rm -rf %{buildroot}
 # >> install pre
 # << install pre
 %qmake5_install
+UNIT_DIR=%{buildroot}%{_libdir}/systemd/user/user-session.target.wants
+mkdir -p "$UNIT_DIR"
+ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 
 # >> install post
 # << install post
@@ -213,11 +217,15 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 # >> files libqmfmessageserver1-qt5
 %{_bindir}/messageserver5
+%{_bindir}/qmf-accountscheck
+%{_bindir}/messageserver5.sh
 %{_libdir}/libqmfmessageserver5.so.*
 %{_libdir}/qmf/plugins5/messageservices/libimap.so
 %{_libdir}/qmf/plugins5/messageservices/libpop.so
 %{_libdir}/qmf/plugins5/messageservices/libqmfsettings.so
 %{_libdir}/qmf/plugins5/messageservices/libsmtp.so
+%{_libdir}/systemd/user/messageserver5.service
+%{_libdir}/systemd/user/user-session.target.wants/messageserver5.service
 # << files libqmfmessageserver1-qt5
 
 %files -n libqmfutil1-qt5
