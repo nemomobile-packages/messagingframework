@@ -16,8 +16,4 @@ SOURCES += accountscheck.cpp
 systemd.files = ../systemd/messageserver5.service
 systemd.path= /usr/lib/systemd/user/
 
-# Target to install script file
-script.files = ../systemd/messageserver5.sh
-script.path = /usr/bin
-
-INSTALLS+= target systemd script
+INSTALLS+= target systemd
