@@ -218,7 +218,6 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 # >> files libqmfmessageserver1-qt5
 %{_bindir}/messageserver5
 %{_bindir}/qmf-accountscheck
-%{_bindir}/messageserver5.sh
 %{_libdir}/libqmfmessageserver5.so.*
 %{_libdir}/qmf/plugins5/messageservices/libimap.so
 %{_libdir}/qmf/plugins5/messageservices/libpop.so
