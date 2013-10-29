@@ -6,7 +6,7 @@ After=booster-generic.service
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/qmf-accountscheck
-ExecStart=/usr/bin/invoker --type=generic --global-syms /usr/bin/messageserver5
+ExecStart=/usr/bin/invoker -o --type=generic --global-syms /usr/bin/messageserver5
 Restart=on-failure
 RestartSec=1
 
