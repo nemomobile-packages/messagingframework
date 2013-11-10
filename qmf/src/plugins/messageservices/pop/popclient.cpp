@@ -87,8 +87,7 @@ PopClient::PopClient(QObject* parent)
       pendingDeletes(false),
       ssoSessionManager(0),
       loginFailed(false),
-      sendLogin(false),
-      accountUpdated(false)
+      sendLogin(false)
 {
     inactiveTimer.setSingleShot(true);
     connect(&inactiveTimer, SIGNAL(timeout()), this, SLOT(connectionInactive()));
@@ -539,6 +538,7 @@ void PopClient::processResponse(const QString &response)
                 loginFailed = true;
                 ssoProcessLogin();
             } else {
+                ssoCredentialsNeedUpdate();
                 operationFailed(QMailServiceAction::Status::ErrLoginFailed, "");
             }
 #else
@@ -1393,12 +1393,21 @@ void PopClient::onSsoSessionError(const QString &error)
     operationFailed(QMailSearchAction::Status::ErrLoginFailed, error);
 }
 
+void PopClient::ssoCredentialsNeedUpdate()
+{
+    if (ssoSessionManager) {
+        ssoSessionManager->credentialsNeedUpdate();
+    } else {
+        qMailLog(POP) << Q_FUNC_INFO << "SSO Error: can't set credentials need update.";
+    }
+}
+
 void PopClient::ssoProcessLogin()
 {
     if (loginFailed) {
         if (ssoSessionManager) {
             sendLogin = true;
-            ssoSessionManager->recreateSsoIdentity(!accountUpdated);
+            ssoSessionManager->recreateSsoIdentity();
         } else
             operationFailed(QMailServiceAction::Status::ErrLoginFailed, "SSO Error: can't recreate identity.");
     } else {
@@ -1416,7 +1425,6 @@ void PopClient::onAccountsUpdated(const QMailAccountIdList &list)
     bool isEnabled(acc.status() & QMailAccount::Enabled);
     if (!isEnabled)
         return;
-    accountUpdated = true;
     setAccount(accountId());
 }
 

@@ -160,15 +160,20 @@ QList<QByteArray> SSOPasswordPlugin::authentication(const SignOn::SessionData &s
     }
 }
 
-SignOn::SessionData SSOPasswordPlugin::sessionData(const QString &accountProvider,  QVariantMap authParameters,
-                                                   bool setUiPolicy) const
+void SSOPasswordPlugin::credentialsNeedUpdate(int accountId)
+{
+    // For the password method we don't do anything, messageserver
+    // already informs the clients about login failed.
+    Q_UNUSED(accountId);
+}
+
+SignOn::SessionData SSOPasswordPlugin::sessionData(const QString &accountProvider,  QVariantMap authParameters) const
 {
     Q_UNUSED(accountProvider);
     Q_UNUSED(authParameters);
 
     SignOn::SessionData data;
-    if (setUiPolicy)
-        data.setUiPolicy(SignOn::RequestPasswordPolicy);
+    data.setUiPolicy(SignOn::NoUserInteractionPolicy);
     return data;
 }
 

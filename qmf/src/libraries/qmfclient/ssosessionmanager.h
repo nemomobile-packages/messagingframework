@@ -49,6 +49,7 @@
 #include <qglobal.h>
 
 // Accounts
+#include <Accounts/Account>
 #include <SignOn/Identity>
 #include <SignOn/SessionData>
 
@@ -64,8 +65,9 @@ public:
     void cancel();
     bool createSsoIdentity(const QMailAccountId &id,
                            const QString &serviceType, int serviceAuthentication);
+    void credentialsNeedUpdate();
     void deleteSsoIdentity();
-    void recreateSsoIdentity(bool setUiPolicy = true);
+    void recreateSsoIdentity();
     void removeSsoIdentity();
     bool waitForSso();
 
@@ -82,6 +84,7 @@ private:
     QString serviceCredentialsId(const QString &serviceType) const;
 
     int _serviceAuthentication;
+    int _accountId;
     bool _waitForSso;
     QByteArray _ssoLogin;
     QString _authMethod;

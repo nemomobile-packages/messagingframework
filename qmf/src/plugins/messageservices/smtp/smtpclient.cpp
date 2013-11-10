@@ -114,7 +114,6 @@ SmtpClient::SmtpClient(QObject* parent)
     , ssoSessionManager(0)
     , loginFailed(false)
     , sendLogin(false)
-    , accountUpdated(false)
 {
     connect(QMailStore::instance(), SIGNAL(accountsUpdated(const QMailAccountIdList&)),
             this, SLOT(accountsUpdated(const QMailAccountIdList&)));
@@ -156,7 +155,6 @@ void SmtpClient::accountsUpdated(const QMailAccountIdList &ids)
     bool isEnabled(acc.status() & QMailAccount::Enabled);
     if (!isEnabled)
         return;
-    accountUpdated = true;
     setAccount(account());
 }
 
@@ -614,7 +612,7 @@ void SmtpClient::nextAction(const QString &response)
         if (loginFailed) {
             if (ssoSessionManager) {
                 sendLogin = true;
-                ssoSessionManager->recreateSsoIdentity(!accountUpdated);
+                ssoSessionManager->recreateSsoIdentity();
             } else
                 operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
         } else {
@@ -659,6 +657,7 @@ void SmtpClient::nextAction(const QString &response)
                 status = SignOnSession;
                 nextAction(QString());
             } else {
+                ssoCredentialsNeedUpdate();
                 operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
             }
 #else
@@ -1086,6 +1085,15 @@ void SmtpClient::stopTransferring()
 }
 
 #ifdef USE_ACCOUNTS_QT
+void SmtpClient::ssoCredentialsNeedUpdate()
+{
+    if (ssoSessionManager) {
+        ssoSessionManager->credentialsNeedUpdate();
+    } else {
+        qMailLog(SMTP) << Q_FUNC_INFO << "SSO Error: can't set credentials need update.";
+    }
+}
+
 void SmtpClient::removeSsoIdentity(const QMailAccountId &accountId)
 {
     if (config.id() == accountId) {
@@ -1102,8 +1110,6 @@ void SmtpClient::onSsoSessionResponse(const QList<QByteArray> &ssoCredentials)
     qMailLog(SMTP)  << "Got SSO response";
     if(!ssoCredentials.isEmpty()) {
         ssoLogin = ssoCredentials;
-        if (accountUpdated)
-            accountUpdated = false;
         if (sendLogin) {
             sendLogin = false;
             QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
