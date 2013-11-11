@@ -589,8 +589,7 @@ ImapClient::ImapClient(QObject* parent)
       _ssoSessionManager(0),
       _loginFailed(false),
       _sendLogin(false),
-      _recreateIdentity(true),
-      _accountUpdated(false)
+      _recreateIdentity(true)
 {
     static int count(0);
     ++count;
@@ -801,6 +800,7 @@ void ImapClient::checkCommandResponse(ImapCommand command, OperationStatus statu
                     return;
                 } else {
                     _recreateIdentity = true;
+                    ssoCredentialsNeedUpdate();
                     operationFailed(QMailServiceAction::Status::ErrLoginFailed, _protocol.lastError());
                     return;
                 }
@@ -2000,14 +2000,25 @@ void ImapClient::ssoProcessLogin()
         // identity without asking the user for new
         // credentials
         if (_ssoSessionManager)
-            _ssoSessionManager->recreateSsoIdentity(!_accountUpdated);
+            _ssoSessionManager->recreateSsoIdentity();
         else
             operationFailed(QMailServiceAction::Status::ErrLoginFailed, "SSO Error: can't recreate identity.");
     } else {
         if (_sendLogin && !_ssoSessionManager->waitForSso()) {
             _sendLogin = false;
             _protocol.sendLogin(_config, _ssoLogin);
+        } else {
+            qMailLog(IMAP) << Q_FUNC_INFO << "Waiting for SSO...";
         }
+    }
+}
+
+void ImapClient::ssoCredentialsNeedUpdate()
+{
+    if (_ssoSessionManager) {
+        _ssoSessionManager->credentialsNeedUpdate();
+    } else {
+        qMailLog(IMAP) << Q_FUNC_INFO << "SSO Error: can't set credentials need update.";
     }
 }
 
@@ -2015,8 +2026,7 @@ void ImapClient::onSsoSessionResponse(const QList<QByteArray> &ssoLogin)
 {
     qMailLog(IMAP)  << "Got SSO response";
     if (!ssoLogin.isEmpty()) {
-        if (_accountUpdated && _ssoLogin != ssoLogin[0]) {
-            _accountUpdated = false;
+        if (_ssoLogin != ssoLogin[0]) {
             _ssoLogin = ssoLogin[0];
         } else {
             _ssoLogin = ssoLogin[0];
@@ -2061,9 +2071,6 @@ void ImapClient::onAccountsUpdated(const QMailAccountIdList &list)
             qMailLog(IMAP) << Q_FUNC_INFO << "invalid config from db";
             return;
         }
-
-        if (_ssoSessionManager)
-            _accountUpdated = true;
 
         qMailLog(IMAP) << Q_FUNC_INFO << imapCfg1.mailUserName() ;
         // compare config modified by the User

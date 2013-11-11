@@ -168,6 +168,7 @@ private:
 
 #ifdef USE_ACCOUNTS_QT
     void ssoProcessLogin();
+    void ssoCredentialsNeedUpdate();
 #endif
     void deactivateConnection();
     void retrieveOperationCompleted();
@@ -208,7 +209,6 @@ private:
     bool _loginFailed;
     bool _sendLogin;
     bool _recreateIdentity;
-    bool _accountUpdated;
     QByteArray _ssoLogin;
 #endif
 };

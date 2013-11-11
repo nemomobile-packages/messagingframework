@@ -59,8 +59,8 @@ public:
     virtual QString key() const = 0;
     virtual QList<QByteArray> authentication(const SignOn::SessionData &sessionData,
                                          const QString &serviceType, const QString &userName, int serviceAuthentication) const = 0;
-    virtual SignOn::SessionData sessionData(const QString &accountProvider, QVariantMap authParameters,
-                                            bool setUiPolicy) const = 0;
+    virtual void credentialsNeedUpdate(int accountId) = 0;
+    virtual SignOn::SessionData sessionData(const QString &accountProvider, QVariantMap authParameters) const = 0;
     virtual SSOAuthService *createService() = 0;
 };
 

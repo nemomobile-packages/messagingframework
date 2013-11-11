@@ -127,9 +127,10 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
     deleteSsoIdentity();
     _serviceAuthentication = serviceAuthentication;
     _serviceType = serviceType;
+    _accountId = id.toULongLong();
 
     SSOAccountManager manager;
-    Accounts::Account* account = manager->account(static_cast<Accounts::AccountId>(id.toULongLong()));
+    Accounts::Account* account = manager->account(static_cast<Accounts::AccountId>(_accountId));
     if (!account)
         return false;
 
@@ -185,12 +186,24 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
                         this, SLOT(ssoSessionError(SignOn::Error))));
         _waitForSso = true;
         _authService = SSOAuthFactory::createService(_authMethod);
-        _session->process(_authService->sessionData(_accountProvider, _authParameters, false), _authMechanism);
+        _session->process(_authService->sessionData(_accountProvider, _authParameters), _authMechanism);
         return true;
     } else {
         _session = 0;
         return false;
     }
+}
+
+/*!
+  Set credentials need update if the plugin supports it.
+*/
+
+void SSOSessionManager::credentialsNeedUpdate()
+{
+    qMailLog(Messaging) << Q_FUNC_INFO << "Setting credentials need update for the service " << _serviceType
+                        << " from account " << _accountId
+                        << " using authentication method " << _authMethod;
+    _authService->credentialsNeedUpdate(_accountId);
 }
 
 /*!
@@ -213,12 +226,9 @@ void SSOSessionManager::deleteSsoIdentity()
     Recreates the SSO identity.
 
     This function should be used when stored authentication details
-    are no longer valid. By default \a setUiPolicy is set to true,
-    in this case if the authentication plugin in use has a UI policy
-    defined this function can trigger additional processes that will request
-    actions from the user.
+    are no longer valid.
 */
-void SSOSessionManager::recreateSsoIdentity(bool setUiPolicy)
+void SSOSessionManager::recreateSsoIdentity()
 {
     qMailLog(Messaging) << Q_FUNC_INFO << "Recreating SSO identity using auth method "
                            << _authMethod;
@@ -227,7 +237,7 @@ void SSOSessionManager::recreateSsoIdentity(bool setUiPolicy)
             _authService = SSOAuthFactory::createService(_authMethod);
 
         _waitForSso = true;
-        _session->process(_authService->sessionData(_accountProvider, _authParameters, setUiPolicy), _authMechanism);
+        _session->process(_authService->sessionData(_accountProvider, _authParameters), _authMechanism);
     } else {
         _waitForSso = true;
         emit ssoSessionError("SSO error: Identity is not valid, can't recreate session.");
@@ -262,6 +272,10 @@ void SSOSessionManager::ssoResponse(const SignOn::SessionData &sessionData)
 
 void SSOSessionManager::ssoSessionError(const SignOn::Error &code)
 {
+    if (code.type() == SignOn::Error::InvalidCredentials || code.type() == SignOn::Error:: UserInteraction) {
+        credentialsNeedUpdate();
+    }
+
     if (_waitForSso) {
         _waitForSso = false;
         _ssoLogin = QByteArray();

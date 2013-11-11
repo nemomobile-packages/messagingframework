@@ -78,6 +78,7 @@ public:
     QMailAccountId account() const;
 
 #ifdef USE_ACCOUNTS_QT
+    void ssoCredentialsNeedUpdate();
     void removeSsoIdentity(const QMailAccountId &accountId);
 #endif
 
@@ -174,7 +175,6 @@ private:
     SSOSessionManager* ssoSessionManager;
     bool loginFailed;
     bool sendLogin;
-    bool accountUpdated;
     QList<QByteArray> ssoLogin;
 #endif
 };

@@ -126,6 +126,7 @@ protected slots:
 
 private:
 #ifdef USE_ACCOUNTS_QT
+    void ssoCredentialsNeedUpdate();
     void ssoProcessLogin();
 #endif
     void deactivateConnection();
@@ -211,7 +212,6 @@ private:
     SSOSessionManager* ssoSessionManager;
     bool loginFailed;
     bool sendLogin;
-    bool accountUpdated;
     QList<QByteArray> ssoLogin;
 #endif
 };
