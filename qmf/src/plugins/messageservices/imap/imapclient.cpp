@@ -841,6 +841,7 @@ void ImapClient::checkCommandResponse(ImapCommand command, OperationStatus statu
 #ifdef USE_ACCOUNTS_QT
         case IMAP_Login:
             _loginFailed = false;
+            _recreateIdentity = true;
             break;
 #endif
         default:
