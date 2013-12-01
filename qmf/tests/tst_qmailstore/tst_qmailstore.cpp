@@ -86,7 +86,14 @@ private slots:
     void removeMessageWithInResponse();
     void message();
     void implementationbase();
+
+private:
+    static const QSet<QString> defaultMailServices;
 };
+
+// Keep in sync with src/libraries/qmfclient/share/email.service
+const QSet<QString> tst_QMailStore::defaultMailServices =
+    QSet<QString>() << "auth";
 
 QTEST_MAIN(tst_QMailStore)
 
@@ -176,8 +183,8 @@ void tst_QMailStore::addAccount()
 
     QMailAccountConfiguration config2(account1.id());
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
-    QCOMPARE(config2.services(), config1.services());
-    foreach (const QString &service, config2.services()) {
+    QCOMPARE(config2.services().toSet(), config1.services().toSet() + defaultMailServices);
+    foreach (const QString &service, config2.services().toSet() - defaultMailServices) {
         if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
             QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
         } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
@@ -721,8 +728,8 @@ void tst_QMailStore::updateAccount()
 
     QMailAccountConfiguration config2(account1.id());
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
-    QCOMPARE(config2.services(), config1.services());
-    foreach (const QString &service, config2.services()) {
+    QCOMPARE(config2.services().toSet(), config1.services().toSet() + defaultMailServices);
+    foreach (const QString &service, config2.services().toSet() - defaultMailServices) {
         if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
             QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
         } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
@@ -1274,8 +1281,8 @@ void tst_QMailStore::removeAccount()
 
     QMailAccountConfiguration config2(account2.id());
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
-    QCOMPARE(config2.services(), config1.services());
-    foreach (const QString &service, config2.services()) {
+    QCOMPARE(config2.services().toSet(), config1.services().toSet() + defaultMailServices);
+    foreach (const QString &service, config2.services().toSet() - defaultMailServices) {
         if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
             QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
         } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
