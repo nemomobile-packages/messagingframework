@@ -156,7 +156,11 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
     }
 
     quint32 credentialsId = account->valueAsInt(serviceCredentialsId(_serviceType), 0);
-    _authUsername = account->valueAsString("emailaddress");
+    _authUsername = account->valueAsString(serviceUsername(_serviceType));
+
+    if (_authUsername.isEmpty()) {
+        _authUsername = account->valueAsString("emailaddress");
+    }
 
     if (_authUsername.isEmpty()) {
         qMailLog(Messaging) << Q_FUNC_INFO
@@ -242,6 +246,20 @@ void SSOSessionManager::recreateSsoIdentity()
         _waitForSso = true;
         emit ssoSessionError("SSO error: Identity is not valid, can't recreate session.");
     }
+}
+
+QString SSOSessionManager::serviceUsername(const QString &serviceType) const
+{
+    if (serviceType == "imap4") {
+        return "imap4/username";
+    } else if (serviceType == "pop3") {
+        return "pop3/username";
+    } else if (serviceType == "smtp") {
+        return "smtp/smtpusername";
+    } else {
+        return QString();
+    }
+
 }
 
 QString SSOSessionManager::serviceCredentialsId(const QString &serviceType) const
