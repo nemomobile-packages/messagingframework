@@ -81,6 +81,7 @@ protected slots:
 
 private:
     bool authPluginAvailable(const QString &method) const;
+    QString serviceUsername(const QString &serviceType) const;
     QString serviceCredentialsId(const QString &serviceType) const;
 
     int _serviceAuthentication;
