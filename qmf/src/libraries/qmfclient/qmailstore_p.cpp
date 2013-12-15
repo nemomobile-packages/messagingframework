@@ -1661,12 +1661,15 @@ QString buildOrderClause(const ArgumentListType &list, const QString &alias)
     QStringList sortColumns;
     foreach (typename ArgumentListType::const_reference arg, list) {
         QString field(fieldName(arg.property, alias));
+        QString sortingCase(" ");
+        if (field == "sender" || field == "subject" || field == "recipients") {
+            sortingCase = " COLLATE NOCASE ";
+        }
         if (arg.mask) {
             field = QString("(%1 & %2)").arg(field).arg(QString::number(arg.mask));
         }
-        sortColumns.append(field + ' ' + (arg.order == Qt::AscendingOrder ? "ASC" : "DESC"));
+        sortColumns.append(field + sortingCase + (arg.order == Qt::AscendingOrder ? "ASC" : "DESC"));
     }
-
     return QString(" ORDER BY ") + sortColumns.join(",");
 }
 
