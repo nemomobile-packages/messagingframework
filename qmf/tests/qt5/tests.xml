@@ -391,8 +391,12 @@
       </case>
       <case name="tst_longstring-mid">
         <description>libqmf-tests:tst_longstring:mid</description>
+<<<<<<< HEAD
         <step>/opt/tests/qmf-qt5/tst_longstring mid</step>
       </case>
+=======
+        <step>/usr/tests/qmf-qt5/tst_longstring mid</step>
+>>>>>>> ee4e897ab24dcef1c285f236cf57d8c7eaf16005
       <environments>
         <scratchbox>true</scratchbox>
         <hardware>true</hardware>
