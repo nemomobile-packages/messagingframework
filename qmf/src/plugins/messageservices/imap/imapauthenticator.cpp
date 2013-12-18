@@ -105,6 +105,16 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
     return QByteArray("LOGIN") + ' ' + ImapProtocol::quoteString(imapCfg.mailUserName().toLatin1())
                                + ' ' + ImapProtocol::quoteString(_password.toLatin1());
 }
+
+QByteArray ImapAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, const QByteArray &ssoLogin)
+{
+    if (ssoLogin.size()) {
+        return QMailAuthenticator::getResponse(svcCfg, challenge, QString::fromLatin1(ssoLogin.constData()));
+    } else {
+        return QByteArray();
+    }
+}
+
 #else
 QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
@@ -123,10 +133,11 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
     return QByteArray("LOGIN") + ' ' + ImapProtocol::quoteString(imapCfg.mailUserName().toLatin1())
                                + ' ' + ImapProtocol::quoteString(imapCfg.mailPassword().toLatin1());
 }
-#endif
-
 QByteArray ImapAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
     return QMailAuthenticator::getResponse(svcCfg, challenge);
 }
+#endif
+
+
 

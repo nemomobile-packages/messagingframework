@@ -138,6 +138,23 @@ QByteArray QMailAuthenticator::getAuthentication(const QMailAccountConfiguration
     should be decoded before invocation, and the result should be encoded for
     transmission.
 */
+#ifdef USE_ACCOUNTS_QT
+QByteArray QMailAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, QString password)
+{
+    QMailServiceConfiguration configuration(svcCfg);
+    if (!configuration.value("smtpusername").isEmpty()
+        && (configuration.value("authentication") == QString::number(QMail::CramMd5Mechanism))) {
+        // SMTP server CRAM-MD5 authentication
+        return cramMd5Response(challenge, configuration.value("smtpusername").toUtf8(), password.toUtf8());
+    } else if (configuration.value("authentication") == QString::number(QMail::CramMd5Mechanism)) {
+        // IMAP/POP server CRAM-MD5 authentication
+        return cramMd5Response(challenge, configuration.value("username").toUtf8(), password.toUtf8());
+    }
+
+    // Unknown service type and/or authentication type
+    return QByteArray();
+}
+#else
 QByteArray QMailAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
     QMailServiceConfiguration configuration(svcCfg);
@@ -153,3 +170,4 @@ QByteArray QMailAuthenticator::getResponse(const QMailAccountConfiguration::Serv
     // Unknown service type and/or authentication type
     return QByteArray();
 }
+#endif

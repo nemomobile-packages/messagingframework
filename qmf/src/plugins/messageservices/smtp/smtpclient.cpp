@@ -637,7 +637,11 @@ void SmtpClient::nextAction(const QString &response)
         if (responseCode == 334) {
             // This is a continuation containing a challenge string (in Base64)
             QByteArray challenge = QByteArray::fromBase64(response.mid(4).toLatin1());
+#ifdef USE_ACCOUNTS_QT
+            QByteArray response(SmtpAuthenticator::getResponse(config.serviceConfiguration("smtp"), challenge, ssoLogin));
+#else
             QByteArray response(SmtpAuthenticator::getResponse(config.serviceConfiguration("smtp"), challenge));
+#endif
 
             if (!response.isEmpty()) {
                 // Send the response as Base64 encoded

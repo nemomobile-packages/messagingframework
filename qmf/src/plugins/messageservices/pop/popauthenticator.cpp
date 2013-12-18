@@ -97,6 +97,15 @@ QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfigur
 
     return result;
 }
+QByteArray PopAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, const QList<QByteArray> &ssoLogin)
+{
+    if (ssoLogin.size()) {
+        QByteArray pass = ssoLogin.at(0);
+        return QMailAuthenticator::getResponse(svcCfg, challenge, QString::fromLatin1(pass.constData()));
+    } else {
+        return QByteArray();
+    }
+}
 #else
 QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
@@ -115,10 +124,10 @@ QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfigur
 
     return result;
 }
-#endif
 
 QByteArray PopAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
     return QMailAuthenticator::getResponse(svcCfg, challenge);
 }
+#endif
 
