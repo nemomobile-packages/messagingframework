@@ -618,8 +618,13 @@ void SmtpClient::nextAction(const QString &response)
         } else {
             if (!ssoSessionManager->waitForSso()) {
                 QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
-                sendCommand(authCmd);
-                status = Authenticating;
+                if (!authCmd.isEmpty()) {
+                    sendCommand(authCmd);
+                    status = Authenticating;
+                } else {
+                    status = Authenticated;
+                    nextAction(QString());
+                }
             } else {
                 sendLogin = true;
             }
@@ -1113,8 +1118,13 @@ void SmtpClient::onSsoSessionResponse(const QList<QByteArray> &ssoCredentials)
         if (sendLogin) {
             sendLogin = false;
             QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
-            sendCommand(authCmd);
-            status = Authenticating;
+            if (!authCmd.isEmpty()) {
+                sendCommand(authCmd);
+                status = Authenticating;
+            } else {
+                status = Authenticated;
+                nextAction(QString());
+            }
         }
     }
 }
