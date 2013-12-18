@@ -53,10 +53,11 @@ public:
     static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
 #ifdef USE_ACCOUNTS_QT
     static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin);
+    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, const QList<QByteArray> &ssoLogin);
 #else
     static QList<QByteArray> getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
-#endif
     static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
+#endif
 };
 
 #endif

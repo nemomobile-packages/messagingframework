@@ -548,7 +548,11 @@ void PopClient::processResponse(const QString &response)
             if ((response.length() > 2) && (response[1] == ' ')) {
                 // This is a continuation containing a challenge string (in Base64)
                 QByteArray challenge = QByteArray::fromBase64(response.mid(2).toLatin1());
+#ifdef USE_ACCOUNTS_QT
+                QByteArray response(PopAuthenticator::getResponse(config.serviceConfiguration("pop3"), challenge, ssoLogin));
+#else
                 QByteArray response(PopAuthenticator::getResponse(config.serviceConfiguration("pop3"), challenge));
+#endif
 
                 if (!response.isEmpty()) {
                     // Send the response as Base64 encoded

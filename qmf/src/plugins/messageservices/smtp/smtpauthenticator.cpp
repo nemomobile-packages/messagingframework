@@ -91,6 +91,27 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
     }
     return result;
 }
+
+QByteArray SmtpAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, QList<QByteArray> &ssoLogin)
+{
+    QByteArray result;
+
+    QMap<QMailAccountId, QList<QByteArray> >::iterator it = gResponses.find(svcCfg.id());
+    if (it != gResponses.end()) {
+        QList<QByteArray> &responses = it.value();
+        result = responses.takeFirst();
+
+        if (responses.isEmpty())
+            gResponses.erase(it);
+    } else {
+        if (ssoLogin.size()) {
+            QByteArray pass = ssoLogin.at(0);
+            result = QMailAuthenticator::getResponse(svcCfg, challenge, QString::fromLatin1(pass.constData()));
+        }
+    }
+
+    return result;
+}
 #else
 QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
@@ -120,7 +141,6 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
     }
     return result;
 }
-#endif
 
 QByteArray SmtpAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
@@ -139,3 +159,4 @@ QByteArray SmtpAuthenticator::getResponse(const QMailAccountConfiguration::Servi
 
     return result;
 }
+#endif

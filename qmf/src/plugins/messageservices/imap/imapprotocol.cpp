@@ -599,7 +599,11 @@ bool LoginState::continuationResponse(ImapContext *c, const QString &received)
 {
     // The server input is Base64 encoded
     QByteArray challenge = QByteArray::fromBase64(received.toLatin1());
+#ifdef USE_ACCOUNTS_QT
+    QByteArray response(ImapAuthenticator::getResponse(_config.serviceConfiguration("imap4"), challenge, _ssoLogin));
+#else
     QByteArray response(ImapAuthenticator::getResponse(_config.serviceConfiguration("imap4"), challenge));
+#endif
     if (!response.isEmpty()) {
         c->sendData(response.toBase64());
     } else {

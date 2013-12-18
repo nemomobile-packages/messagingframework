@@ -95,6 +95,8 @@ QList<QByteArray> SSOPasswordPlugin::getIMAPAuthentication(const QString &passwo
         QByteArray user(username.toLatin1());
         QByteArray pass(password.toLatin1());
         return QList<QByteArray>() << QByteArray("AUTHENTICATE PLAIN ") + QByteArray(user + '\0' + user + '\0' + pass).toBase64();
+    } if (serviceAuthentication == QMail::CramMd5Mechanism) {
+        return QList<QByteArray>() << QByteArray(password.toLatin1());
     } else {
         return QList<QByteArray>() << QByteArray("LOGIN") + ' ' + quoteIMAPString(username.toLatin1())
                                    + ' ' + quoteIMAPString(password.toLatin1());
@@ -104,11 +106,13 @@ QList<QByteArray> SSOPasswordPlugin::getIMAPAuthentication(const QString &passwo
 QList<QByteArray> SSOPasswordPlugin::getPOPAuthentication(const QString &password,
                                                    const QString &username, int serviceAuthentication) const
 {
-    Q_UNUSED(serviceAuthentication);
     QList<QByteArray> result;
-
-    result.append(QByteArray("USER ") + username.toLatin1());
-    result.append(QByteArray("PASS ") + password.toLatin1());
+    if (serviceAuthentication == QMail::CramMd5Mechanism) {
+        result.append(QByteArray(password.toLatin1()));
+    } else {
+        result.append(QByteArray("USER ") + username.toLatin1());
+        result.append(QByteArray("PASS ") + password.toLatin1());
+    }
 
     return result;
 }
@@ -127,6 +131,8 @@ QList<QByteArray> SSOPasswordPlugin::getSMTPAuthentication(const QString &passwo
     } else if (serviceAuthentication == QMail::PlainMechanism) {
         result.append(QByteArray("AUTH PLAIN"));
         result.append(QByteArray(user + '\0' + user + '\0' + pass));
+    } else if (serviceAuthentication == QMail::CramMd5Mechanism) {
+        result.append(QByteArray(pass));
     }
     return result;
 }
