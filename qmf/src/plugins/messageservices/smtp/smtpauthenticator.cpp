@@ -63,10 +63,10 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
     SmtpConfiguration smtpCfg(svcCfg);
     if (smtpCfg.smtpAuthentication() != SmtpConfiguration::Auth_NONE) {
         QMailAccountId id(smtpCfg.id());
-        QByteArray username(smtpCfg.smtpUsername().toLatin1());
+        QByteArray username(smtpCfg.smtpUsername().toUtf8());
         QByteArray pass;
         if (ssoLogin.isEmpty()) {
-            pass = smtpCfg.smtpPassword().toLatin1();
+            pass = smtpCfg.smtpPassword().toUtf8();
             qMailLog(SMTP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
                            << ", using password from accounts configuration";
         } else {
@@ -80,7 +80,7 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
             result = QByteArray("LOGIN");
             gResponses[id] = (QList<QByteArray>() << username << pass);
         } else if (smtpCfg.smtpAuthentication() == SmtpConfiguration::Auth_PLAIN) {
-            result = QByteArray("PLAIN");
+            result = QByteArray("PLAIN ") + QByteArray(username + '\0' + username + '\0' + pass).toBase64();
             gResponses[id] = (QList<QByteArray>() << QByteArray(username + '\0' + username + '\0' + pass));
         }
     }
@@ -123,8 +123,8 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
     SmtpConfiguration smtpCfg(svcCfg);
     if (smtpCfg.smtpAuthentication() != SmtpConfiguration::Auth_NONE) {
         QMailAccountId id(smtpCfg.id());
-        QByteArray username(smtpCfg.smtpUsername().toLatin1());
-        QByteArray password(smtpCfg.smtpPassword().toLatin1());
+        QByteArray username(smtpCfg.smtpUsername().toUtf8());
+        QByteArray password(smtpCfg.smtpPassword().toUtf8());
 
         if (smtpCfg.smtpAuthentication() == SmtpConfiguration::Auth_LOGIN) {
             result = QByteArray("LOGIN");
