@@ -121,15 +121,15 @@ QList<QByteArray> SSOPasswordPlugin::getSMTPAuthentication(const QString &passwo
                                                     const QString &username, int serviceAuthentication) const
 {
     QList<QByteArray> result;
-    QByteArray user(username.toLatin1());
-    QByteArray pass(password.toLatin1());
+    QByteArray user(username.toUtf8());
+    QByteArray pass(password.toUtf8());
 
     if (serviceAuthentication == QMail::LoginMechanism) {
         result.append(QByteArray("AUTH LOGIN"));
         result.append(QByteArray(user));
         result.append(QByteArray(pass));
     } else if (serviceAuthentication == QMail::PlainMechanism) {
-        result.append(QByteArray("AUTH PLAIN"));
+        result.append(QByteArray("AUTH PLAIN ") + QByteArray(user + '\0' + user + '\0' + pass).toBase64());
         result.append(QByteArray(user + '\0' + user + '\0' + pass));
     } else if (serviceAuthentication == QMail::CramMd5Mechanism) {
         result.append(QByteArray(pass));
