@@ -130,7 +130,7 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
             result = QByteArray("LOGIN");
             gResponses[id] = (QList<QByteArray>() << username << password);
         } else if (smtpCfg.smtpAuthentication() == SmtpConfiguration::Auth_PLAIN) {
-            result = QByteArray("PLAIN");
+            result = QByteArray("PLAIN ") + QByteArray(username + '\0' + username + '\0' + password).toBase64();
             gResponses[id] = (QList<QByteArray>() << QByteArray(username + '\0' + username + '\0' + password));
         }
     }
