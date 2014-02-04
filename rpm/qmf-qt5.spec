@@ -239,7 +239,6 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 %{_libdir}/libqmfclient5.so.*
 %{_libdir}/qmf/plugins5/contentmanagers/libqmfstoragemanager.so
 %{_libdir}/qmf/plugins5/ssoauth/libpasswordplugin.so
-%{_datadir}/accounts/*
 # << files libqmfclient1-qt5
 
 %files examples
