@@ -42,6 +42,7 @@
 #include "ssosessionmanager.h"
 #include "ssoaccountmanager.h"
 #include <qmaillog.h>
+#include <QTimer>
 
 #include <Accounts/AccountService>
 #include <Accounts/AuthData>
@@ -78,6 +79,8 @@
 SSOSessionManager::SSOSessionManager(QObject *parent)
     : QObject(parent),
       _waitForSso(false),
+      _recreatingSession(false),
+      _reAuthenticate(false),
       _identity(0),
       _session(0)
 {
@@ -190,7 +193,8 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
                         this, SLOT(ssoSessionError(SignOn::Error))));
         _waitForSso = true;
         _authService = SSOAuthFactory::createService(_authMethod);
-        _session->process(_authService->sessionData(_accountProvider, _authParameters), _authMechanism);
+        _sessionData = _authService->sessionData(_accountProvider, _authParameters);
+        _session->process(_sessionData, _authMechanism);
         return true;
     } else {
         _session = 0;
@@ -241,7 +245,8 @@ void SSOSessionManager::recreateSsoIdentity()
             _authService = SSOAuthFactory::createService(_authMethod);
 
         _waitForSso = true;
-        _session->process(_authService->sessionData(_accountProvider, _authParameters), _authMechanism);
+        _recreatingSession = true;
+        _session->process(_sessionData, _authMechanism);
     } else {
         _waitForSso = true;
         emit ssoSessionError("SSO error: Identity is not valid, can't recreate session.");
@@ -282,9 +287,34 @@ void SSOSessionManager::ssoResponse(const SignOn::SessionData &sessionData)
         if (!_authService)
             _authService = SSOAuthFactory::createService(_authMethod);
 
-        QList<QByteArray> ssoLogin = _authService->authentication(sessionData, _serviceType,
-                                                                  _authUsername, _serviceAuthentication);
-        emit ssoSessionResponse(ssoLogin);
+        if(_authService->key() == "oauth2") {
+            QVariantMap newToken;
+            foreach (const QString &key, sessionData.propertyNames()) {
+                newToken.insert(key, sessionData.getProperty(key));
+            }
+
+            if (_recreatingSession) {
+                if (_oldToken["AccessToken"].toString() != newToken["AccessToken"].toString()
+                        && !newToken["AccessToken"].toString().isEmpty()) {
+                    _recreatingSession = false;
+                    qMailLog(Messaging) << Q_FUNC_INFO << "Recreating SSO identity, authentication token refreshed sucessfully";
+                    sessionResponse(sessionData);
+                } else {
+                    _oldToken = newToken;
+                    _recreatingSession = false;
+                    forceTokenRefresh();
+                }
+                return;
+            } else if (_reAuthenticate) {
+                _reAuthenticate = false;
+                QTimer::singleShot(5000, this, SLOT(reAuthenticate()));
+            } else {
+                _oldToken = newToken;
+                sessionResponse(sessionData);
+            }
+        } else {
+            sessionResponse(sessionData);
+        }
     }
 }
 
@@ -299,6 +329,38 @@ void SSOSessionManager::ssoSessionError(const SignOn::Error &code)
         _ssoLogin = QByteArray();
         emit ssoSessionError(QString("SSO error %1: %2").arg(code.type()).arg(code.message()));
     }
+}
+
+void SSOSessionManager::forceTokenRefresh()
+{
+    qMailLog(Messaging) << Q_FUNC_INFO << "Forcing authentication token refresh";
+    QVariantMap providedTokens = _oldToken;
+    providedTokens.insert("ExpiresIn", 1);
+
+    QVariantMap sdvmap(_authParameters);
+    sdvmap.insert("UiPolicy", SignOn::NoUserInteractionPolicy);
+    sdvmap.insert("ClientId", _sessionData.getProperty("ClientId"));
+    sdvmap.insert("ClientSecret", _sessionData.getProperty("ClientSecret"));
+    sdvmap.insert("ProvidedTokens", providedTokens);
+    _refreshSessionData = sdvmap;
+
+    _reAuthenticate = true;
+    _waitForSso = true;
+    _session->process(SignOn::SessionData(sdvmap), _authMechanism);
+}
+
+void SSOSessionManager::reAuthenticate()
+{
+    qMailLog(Messaging) << Q_FUNC_INFO << "Re-authenticating with SSO after token refresh";
+    _waitForSso = true;
+    _session->process(_sessionData, _authMechanism);
+}
+
+void SSOSessionManager::sessionResponse(const SignOn::SessionData &sessionData)
+{
+    QList<QByteArray> ssoLogin = _authService->authentication(sessionData, _serviceType,
+                                                          _authUsername, _serviceAuthentication);
+    emit ssoSessionResponse(ssoLogin);
 }
 
 /*!

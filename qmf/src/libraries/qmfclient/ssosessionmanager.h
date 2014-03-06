@@ -79,14 +79,21 @@ protected slots:
     void ssoResponse(const SignOn::SessionData &sessionData);
     void ssoSessionError(const SignOn::Error &code);
 
+private slots:
+    void reAuthenticate();
+
 private:
     bool authPluginAvailable(const QString &method) const;
     QString serviceUsername(const QString &serviceType) const;
     QString serviceCredentialsId(const QString &serviceType) const;
+    void forceTokenRefresh();
+    void sessionResponse(const SignOn::SessionData &sessionData);
 
     int _serviceAuthentication;
     int _accountId;
     bool _waitForSso;
+    bool _recreatingSession;
+    bool _reAuthenticate;
     QByteArray _ssoLogin;
     QString _authMethod;
     QString _authMechanism;
@@ -98,6 +105,9 @@ private:
     SSOAuthService *_authService;
     SignOn::Identity *_identity;
     SignOn::AuthSession *_session;
+    SignOn::SessionData _sessionData;
+    QVariantMap _oldToken;
+    QVariantMap _refreshSessionData;
 };
 
 #endif // SSOSESSIONMANAGER_H
