@@ -298,6 +298,7 @@ void SSOSessionManager::ssoResponse(const SignOn::SessionData &sessionData)
                         && !newToken["AccessToken"].toString().isEmpty()) {
                     _recreatingSession = false;
                     qMailLog(Messaging) << Q_FUNC_INFO << "Recreating SSO identity, authentication token refreshed sucessfully";
+                    _oldToken = newToken;
                     sessionResponse(sessionData);
                 } else {
                     _oldToken = newToken;
