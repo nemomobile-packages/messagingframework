@@ -155,8 +155,10 @@ int QMail::fileLock(const QString& lockFile)
     if((fdlock = ::open(path.toLatin1(), O_WRONLY|O_CREAT|O_TRUNC, 0666)) == -1)
         return -1;
 
-    if(::fcntl(fdlock, F_SETLK, &fl) == -1)
+    if(::fcntl(fdlock, F_SETLK, &fl) == -1) {
+        ::close(fdlock);
         return -1;
+    }
 
     return fdlock;
 #endif
