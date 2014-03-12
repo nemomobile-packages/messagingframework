@@ -190,18 +190,8 @@ bool QMail::fileUnlock(int id)
 
     return false;
 #else
-    struct flock fl;
-
-    fl.l_type = F_UNLCK;
-    fl.l_whence = SEEK_SET;
-    fl.l_start = 0;
-    fl.l_len = 0;
 
     int result = -1;
-
-    result = ::fcntl(id,F_SETLK, &fl);
-    if (result == -1)
-        return false;
 
     result = ::close(id);
     if (result == -1)
