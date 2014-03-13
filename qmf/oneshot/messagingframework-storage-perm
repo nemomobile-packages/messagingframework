@@ -1,11 +1,30 @@
 #!/bin/sh
 
-# only works as root
-[ $UID -eq 0 ] || exit 0
-
 storage_dir=/home/nemo/.qmf
-mkdir -p $storage_dir
-chown privileged $storage_dir
-chgrp privileged $storage_dir
-chmod 770 $storage_dir
+if [ ! -d $storage_dir ]; then
+    mkdir -p $storage_dir
+    if [ $? -gt 0 ]; then
+        echo "could not mkdir qmf storage directory"
+        exit 1
+    fi
+fi
 
+chown -v privileged.privileged $storage_dir
+if [ $? -gt 0 ]; then
+    echo "could not chown qmf storage directory"
+    exit 1
+fi
+
+chmod -v 070 $storage_dir
+if [ $? -gt 0 ]; then
+    echo "could not chmod qmf storage directory"
+    exit 1
+fi
+
+chown -v -R nemo.privileged "$storage_dir/*"
+if [ $? -gt 0 ]; then
+    echo "could not chown content of qmf storage directory"
+    exit 1
+fi
+
+exit 0
