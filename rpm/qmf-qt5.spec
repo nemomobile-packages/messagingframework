@@ -22,9 +22,6 @@ BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  qt5-qttools-qthelp-devel
 BuildRequires:  qt5-plugin-platform-minimal
 BuildRequires:  qt5-plugin-sqldriver-sqlite
-BuildRequires: oneshot
-Requires: oneshot
-%{_oneshot_requires_post}
 BuildRequires:  fdupes
 
 %description
@@ -180,17 +177,12 @@ UNIT_DIR=%{buildroot}%{_libdir}/systemd/user/user-session.target.wants
 mkdir -p "$UNIT_DIR"
 ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 
-mkdir -p %{buildroot}/%{_oneshotdir}
-install -D -m 755 oneshot/messagingframework-storage-perm %{buildroot}/%{_oneshotdir}
-
 # >> install post
 # << install post
 
 %fdupes  %{buildroot}/%{_includedir}
 
-%post -n libqmfmessageserver1-qt5
-/sbin/ldconfig
-%{_bindir}/add-oneshot messagingframework-storage-perm
+%post -n libqmfmessageserver1-qt5 -p /sbin/ldconfig
 
 %postun -n libqmfmessageserver1-qt5 -p /sbin/ldconfig
 
@@ -233,7 +225,6 @@ install -D -m 755 oneshot/messagingframework-storage-perm %{buildroot}/%{_onesho
 %{_libdir}/qmf/plugins5/messageservices/libsmtp.so
 %{_libdir}/systemd/user/messageserver5.service
 %{_libdir}/systemd/user/user-session.target.wants/messageserver5.service
-%{_oneshotdir}/messagingframework-storage-perm
 # << files libqmfmessageserver1-qt5
 
 %files -n libqmfutil1-qt5
