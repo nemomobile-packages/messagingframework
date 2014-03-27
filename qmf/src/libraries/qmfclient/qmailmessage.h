@@ -274,6 +274,9 @@ private:
 
     uint indicativeSize() const;
 
+    bool encoded() const;
+    void setEncoded(bool value);
+
     void output(QDataStream& out, bool includeAttachments) const;
     static QMailMessageBody fromLongString(LongString& ls, const QMailMessageContentType& type, TransferEncoding encoding, EncodingStatus status);
 };
@@ -341,7 +344,7 @@ public:
     void setBoundary(const QByteArray& text);
 
     // Body management interface:
-    void setBody(const QMailMessageBody& body);
+    void setBody(const QMailMessageBody& body, QMailMessageBody::EncodingFormat encodingStatus = QMailMessageBody::None);
     QMailMessageBody body() const;
 
     bool hasBody() const;
