@@ -65,6 +65,7 @@ public:
     void cancel();
     bool createSsoIdentity(const QMailAccountId &id,
                            const QString &serviceType, int serviceAuthentication);
+    bool checkingCredentials() const;
     void credentialsNeedUpdate();
     void deleteSsoIdentity();
     void recreateSsoIdentity();
@@ -94,6 +95,7 @@ private:
     bool _waitForSso;
     bool _recreatingSession;
     bool _reAuthenticate;
+    bool _credentialsCheck;
     QByteArray _ssoLogin;
     QString _authMethod;
     QString _authMechanism;

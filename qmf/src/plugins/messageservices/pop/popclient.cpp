@@ -534,12 +534,16 @@ void PopClient::processResponse(const QString &response)
         if (response[0] != '+') {
             // Authentication failed
 #ifdef USE_ACCOUNTS_QT
-            if (ssoSessionManager && !loginFailed) {
-                loginFailed = true;
-                ssoProcessLogin();
-            } else {
-                ssoCredentialsNeedUpdate();
+            if (ssoSessionManager && ssoSessionManager->checkingCredentials()) {
                 operationFailed(QMailServiceAction::Status::ErrLoginFailed, "");
+            } else {
+                if (ssoSessionManager && !loginFailed) {
+                    loginFailed = true;
+                    ssoProcessLogin();
+                } else {
+                    ssoCredentialsNeedUpdate();
+                    operationFailed(QMailServiceAction::Status::ErrLoginFailed, "");
+                }
             }
 #else
             operationFailed(QMailServiceAction::Status::ErrLoginFailed, "");
