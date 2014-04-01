@@ -93,6 +93,7 @@ public:
 
     enum EncodingFormat
     {
+        None = 0,
         Encoded = 1,
         Decoded = 2
     };
