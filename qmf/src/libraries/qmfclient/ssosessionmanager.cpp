@@ -81,6 +81,7 @@ SSOSessionManager::SSOSessionManager(QObject *parent)
       _waitForSso(false),
       _recreatingSession(false),
       _reAuthenticate(false),
+      _credentialsCheck(false),
       _identity(0),
       _session(0)
 {
@@ -171,6 +172,8 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
         return false;
     }
 
+    _credentialsCheck = account->valueAsBool("credentialsCheck");
+
     // Some plugins stores an identity per service.
     // If there is no specific credentials for the specific service than we should check regular credentialsId.
     // This allows to store different credentials for incoming and outgoing servers for example.
@@ -200,6 +203,14 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
         _session = 0;
         return false;
     }
+}
+
+/*!
+  Returns true if credentials checking is being performed for this account, otherwise returns false.
+*/
+bool SSOSessionManager::checkingCredentials() const
+{
+    return _credentialsCheck;
 }
 
 /*!

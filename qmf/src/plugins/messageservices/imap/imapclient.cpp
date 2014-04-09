@@ -793,7 +793,10 @@ void ImapClient::checkCommandResponse(ImapCommand command, OperationStatus statu
                 // We try only once to recreate the sso identity and relogin,
                 // in order to allow user interaction if defined by the sso
                 // plugin.
-                if (!_loginFailed && _recreateIdentity) {
+                if (_ssoSessionManager && _ssoSessionManager->checkingCredentials()) {
+                    operationFailed(QMailServiceAction::Status::ErrLoginFailed, _protocol.lastError());
+                    return;
+                } else if (!_loginFailed && _recreateIdentity) {
                     _loginFailed = true;
                     _sendLogin = true;
                     ssoProcessLogin();

@@ -125,7 +125,10 @@ SmtpService::SmtpService(const QMailAccountId &accountId)
 
     _client.setAccount(accountId);
 
+// Don't try to autoconnect on account creation for SSO services
+#ifndef USE_ACCOUNTS_QT
     fetchCapabilities();
+#endif
 }
 
 void SmtpService::fetchCapabilities()

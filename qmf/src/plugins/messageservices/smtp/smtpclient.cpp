@@ -610,11 +610,16 @@ void SmtpClient::nextAction(const QString &response)
     case SignOnSession:
     {
         if (loginFailed) {
-            if (ssoSessionManager) {
-                sendLogin = true;
-                ssoSessionManager->recreateSsoIdentity();
-            } else
+            if (ssoSessionManager && ssoSessionManager->checkingCredentials()) {
                 operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+            } else {
+                if (ssoSessionManager) {
+                    sendLogin = true;
+                    ssoSessionManager->recreateSsoIdentity();
+                } else {
+                    operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+                }
+            }
         } else {
             if (!ssoSessionManager->waitForSso()) {
                 QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
@@ -661,7 +666,9 @@ void SmtpClient::nextAction(const QString &response)
             operationFailed(QMailServiceAction::Status::ErrConfiguration, response);
         } else {
 #ifdef USE_ACCOUNTS_QT
-            if (!loginFailed) {
+            if (ssoSessionManager && ssoSessionManager->checkingCredentials()) {
+               operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
+            } else if (!loginFailed) {
                 loginFailed = true;
                 status = SignOnSession;
                 nextAction(QString());
