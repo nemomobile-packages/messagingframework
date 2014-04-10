@@ -2661,6 +2661,10 @@ bool SSOAccountSatisfyTheProperty(Accounts::Account* ssoAccount, const QMailAcco
             status &= (~QMailAccount::Enabled);
             status |= enabled?(QMailAccount::Enabled):0;
 
+            bool canTransmit = ssoAccount->valueAsBool("canTransmit", true);
+            status &= (~QMailAccount::CanTransmit);
+            status |= canTransmit?(QMailAccount::CanTransmit):0;
+
             return SSOAccountCompareProperty<quint64>(ssoAccount,
                                                       status,
                                                       argument.op, argument.valueList);
@@ -3627,9 +3631,11 @@ QMailAccount QMailStorePrivate::extractAccount(const QSharedPointer<Accounts::Ac
     const bool& enabled = ssoAccount->enabled();
     ssoAccount->selectService(service);
     const bool& isDefault = ssoAccount->valueAsBool("email/default");
+    const bool& canTransmit = ssoAccount->valueAsBool("canTransmit", true);
 
     result.setStatus(QMailAccount::Enabled, enabled);
     result.setStatus(QMailAccount::PreferredSender, isDefault);
+    result.setStatus(QMailAccount::CanTransmit, canTransmit);
 
     result.setSignature(ssoAccount->valueAsString("signature"));
     result.setFromAddress(ssoAccount->contains("fullName")?
@@ -6136,6 +6142,8 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccou
     //Account was never synced
     ssoAccount->setValue("lastSynchronized", quint64(0));
     ssoAccount->setValue("iconPath", account->iconPath());
+    const bool canTransmit = (account->status() & QMailAccount::CanTransmit);
+    ssoAccount->setValue("canTransmit", canTransmit);
 
     if (!ssoAccount->syncAndBlock())
         return DatabaseFailure;
@@ -6938,7 +6946,9 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
             ssoAccount->setValue("lastSynchronized", quint64(0));
         }
         bool isDefault = account->status() & QMailAccount::PreferredSender;
+        bool canTransmit = account->status() & QMailAccount::CanTransmit;
         ssoAccount->setValue("email/default", isDefault);
+        ssoAccount->setValue("canTransmit", canTransmit);
         ssoAccount->setValue("iconPath", account->iconPath());
 #else
         QString properties("type=?, name=?, emailaddress=?, status=?, signature=?, lastsynchronized=?, iconpath=?");
