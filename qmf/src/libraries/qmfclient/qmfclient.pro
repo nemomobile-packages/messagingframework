@@ -186,17 +186,15 @@ packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
                ssosessionmanager.cpp \
                ssoauthplugin.cpp
 
-    contains(DEFINES,INSTALL_SSO_PROVIDER) {
-        # Install email SSO provider description
-        sso_providers.files = share/email.provider
-        sso_providers.path  = $$QMF_INSTALL_ROOT/share/accounts/providers
+    # Install email SSO provider description
+    sso_providers.files = share/email.provider
+    sso_providers.path  = $$QMF_INSTALL_ROOT/share/accounts/providers
 
-        # Install email SSO service description
-        sso_services.files = share/email.service
-        sso_services.path  = $$QMF_INSTALL_ROOT/share/accounts/services
+    # Install email SSO service description
+    sso_services.files = share/email.service
+    sso_services.path  = $$QMF_INSTALL_ROOT/share/accounts/services
 
-        INSTALLS += sso_providers sso_services
-    }
+    INSTALLS += sso_providers sso_services
 
 } else {
      warning("Accounts-qt support requires accounts-qt")
