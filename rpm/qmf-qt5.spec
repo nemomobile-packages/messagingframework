@@ -254,6 +254,7 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 %files tests
 %defattr(-,root,root,-)
 # >> files tests
+%{_datadir}/accounts/*
 /opt/tests/qmf-qt5/*
 # << files tests
 
