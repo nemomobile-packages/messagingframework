@@ -75,6 +75,10 @@ public:
 
     int checkInterval() const;
     bool intervalCheckRoamingEnabled() const;
+
+#ifndef QT_NO_OPENSSL
+    bool acceptUntrustedCertificates() const;
+#endif
 };
 
 class PLUGIN_EXPORT PopConfigurationEditor : public PopConfiguration
@@ -88,6 +92,7 @@ public:
     void setMailPort(int i);
 #ifndef QT_NO_OPENSSL
     void setMailEncryption(int t);
+    void setAcceptUntrustedCertificates(bool v);
 #endif
 
     void setDeleteMail(bool b);
