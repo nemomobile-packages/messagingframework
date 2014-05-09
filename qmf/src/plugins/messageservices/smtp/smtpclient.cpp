@@ -248,10 +248,20 @@ void SmtpClient::newConnection()
                 this, SIGNAL(updateStatus(QString)));
         connect(transport, SIGNAL(errorOccurred(int,QString)),
                 this, SLOT(transportError(int,QString)));
+#ifndef QT_NO_OPENSSL
+        connect(transport, SIGNAL(sslErrorOccured(QMailServiceAction::Status::ErrorCode,QString)),
+                this, SIGNAL(connectionError(QMailServiceAction::Status::ErrorCode,QString)));
+#endif
     }
 
     qMailLog(SMTP) << "Open SMTP connection" << flush;
+#ifndef QT_NO_OPENSSL
+    transport->open(smtpCfg.smtpServer(), smtpCfg.smtpPort(), static_cast<QMailTransport::EncryptType>(smtpCfg.smtpEncryption()), smtpCfg.acceptUntrustedCertificates());
+#else
     transport->open(smtpCfg.smtpServer(), smtpCfg.smtpPort(), static_cast<QMailTransport::EncryptType>(smtpCfg.smtpEncryption()));
+#endif
+
+
 }
 
 QMailServiceAction::Status::ErrorCode SmtpClient::addMail(const QMailMessage& mail)

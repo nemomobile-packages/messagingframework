@@ -2928,10 +2928,18 @@ bool ImapProtocol::open( const ImapConfiguration& config, qint64 bufferSize)
                 this, SLOT(connected(QMailTransport::EncryptType)));
         connect(_transport, SIGNAL(readyRead()),
                 this, SLOT(incomingData()));
+#ifndef QT_NO_OPENSSL
+        connect(_transport, SIGNAL(sslErrorOccured(QMailServiceAction::Status::ErrorCode,QString)),
+                this, SIGNAL(connectionError(QMailServiceAction::Status::ErrorCode,QString)));
+#endif
     }
 
     qMailLog(IMAP) << objectName() << "About to open connection" << config.mailUserName() << config.mailServer(); // useful to see object name
-    _transport->open( config.mailServer(), config.mailPort(), static_cast<QMailTransport::EncryptType>(config.mailEncryption()));
+#ifndef QT_NO_OPENSSL
+    _transport->open(config.mailServer(), config.mailPort(), static_cast<QMailTransport::EncryptType>(config.mailEncryption()), config.acceptUntrustedCertificates());
+#else
+    _transport->open(config.mailServer(), config.mailPort(), static_cast<QMailTransport::EncryptType>(config.mailEncryption()));
+#endif
     if (bufferSize) {
         qMailLog(IMAP) << objectName() << "Setting read buffer size to" << bufferSize;
         _transport->socket().setReadBufferSize(bufferSize);

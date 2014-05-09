@@ -55,6 +55,7 @@
 
 #include <qmaillog.h>
 #include <qmailnamespace.h>
+#include <qmailserviceaction.h>
 
 #ifndef QT_NO_OPENSSL
 static QString sslCertsPath()
@@ -175,7 +176,8 @@ qint64 QMailTransport::Socket::bytesSinceMark() const
 QMailTransport::QMailTransport(const char* name)
     : mName(name),
       mConnected(false),
-      mInUse(false)
+      mInUse(false),
+      mAcceptUntrustedCertificates(0)
 {
 #ifndef QT_NO_OPENSSL
     if (QSslSocket::defaultCaCertificates().isEmpty())
@@ -270,14 +272,15 @@ void QMailTransport::createSocket(EncryptType encryptType)
 /*!
     Opens a connection to the supplied \a url and \a port, using the specified \a encryptionType.
 */
-void QMailTransport::open(const QString& url, int port, EncryptType encryptionType)
+void QMailTransport::open(const QString& url, int port, EncryptType encryptionType, bool acceptUntrustedCertificates)
 {
     if (mSocket && mSocket->isOpen())
     {
         qWarning() << "Failed to open connection - already open!";
         return;
     }
-    
+
+    mAcceptUntrustedCertificates = acceptUntrustedCertificates;
     mInUse = true;
 
     const int threeMin = 3 * 60 * 1000;
@@ -423,10 +426,24 @@ void QMailTransport::encryptionEstablished()
 /*! \internal */
 void QMailTransport::connectionFailed(const QList<QSslError>& errors)
 {
-    if (ignoreCertificateErrors(errors))
+    bool sslSupported = ignoreCertificateErrors(errors);
+    if (sslSupported && mAcceptUntrustedCertificates) {
+        qWarning() << "Accepting untrusted certificates";
         mSocket->ignoreSslErrors();
-    else
-        errorHandling(QAbstractSocket::UnknownSocketError, "");
+    } else {
+        connectToHostTimeOut.stop();
+        mConnected = false;
+        mInUse = false;
+        mSocket->abort();
+
+        emit updateStatus(tr("Error occurred"));
+
+        if (!sslSupported) {
+            emit sslErrorOccured(QMailServiceAction::Status::ErrNoSslSupport, tr("Socket error"));
+        } else {
+            emit sslErrorOccured(QMailServiceAction::Status::ErrUntrustedCertificates, tr("Socket error"));
+        }
+    }
 }
 
 /*! \internal */

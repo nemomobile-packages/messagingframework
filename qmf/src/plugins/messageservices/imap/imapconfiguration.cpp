@@ -206,6 +206,16 @@ void ImapConfiguration::setSearchLimit(int limit)
     setValue("searchLimit", QString::number(limit));
 }
 
+#ifndef QT_NO_OPENSSL
+
+bool ImapConfiguration::acceptUntrustedCertificates() const
+{
+    qDebug() << Q_FUNC_INFO << value("acceptUntrustedCertificates", "0");
+    return (value("acceptUntrustedCertificates", "0").toInt() != 0);
+}
+
+#endif
+
 ImapConfigurationEditor::ImapConfigurationEditor(QMailAccountConfiguration *config)
     : ImapConfiguration(*config)
 {
@@ -241,6 +251,11 @@ void ImapConfigurationEditor::setMailEncryption(int t)
 void ImapConfigurationEditor::setMailAuthentication(int t)
 {
     setValue("authentication", QString::number(t));
+}
+
+void ImapConfigurationEditor::setAcceptUntrustedCertificates(bool v)
+{
+    setValue("acceptUntrustedCertificates", QString::number(v ? 1 : 0));
 }
 
 #endif

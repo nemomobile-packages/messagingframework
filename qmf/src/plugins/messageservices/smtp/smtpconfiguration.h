@@ -77,6 +77,7 @@ public:
     QString smtpServer() const;
     int smtpPort() const;
 #ifndef QT_NO_OPENSSL
+    bool acceptUntrustedCertificates() const;
     QString smtpUsername() const;
     QString smtpPassword() const;
 #endif
@@ -94,13 +95,10 @@ public:
     void setSmtpServer(const QString &str);
     void setSmtpPort(int i);
 #ifndef QT_NO_OPENSSL
+    void setAcceptUntrustedCertificates(bool v);
     void setSmtpUsername(const QString& username);
     void setSmtpPassword(const QString& password);
-#endif
-#ifndef QT_NO_OPENSSL
     void setSmtpAuthentication(int t);
-#endif
-#ifndef QT_NO_OPENSSL
     void setSmtpEncryption(int t);
 #endif
 };
