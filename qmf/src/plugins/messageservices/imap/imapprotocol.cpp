@@ -2865,7 +2865,6 @@ ImapProtocol::ImapProtocol()
       _authenticated(false),
       _receivedCapabilities(false)
 {
-    connect(&_incomingDataTimer, SIGNAL(timeout()), this, SLOT(incomingData()));
     connect(&_fsm->listState, SIGNAL(mailboxListed(QString, QString)),
             this, SIGNAL(mailboxListed(QString, QString)));
     connect(&_fsm->genUrlAuthState, SIGNAL(urlAuthorized(QString)),
@@ -3325,12 +3324,9 @@ void ImapProtocol::incomingData()
 
         readLines++;
         if (readLines >= MAX_LINES) {
-            _incomingDataTimer.start(0);
-            return;
+            incomingData();
         }
     }
-
-    _incomingDataTimer.stop();
 }
 
 void ImapProtocol::continuation(ImapCommand command, const QString &recv)
