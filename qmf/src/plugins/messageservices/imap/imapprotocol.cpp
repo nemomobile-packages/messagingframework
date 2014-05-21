@@ -3319,6 +3319,11 @@ QString ImapProtocol::sendCommandLiteral(const QString &cmd, uint length)
 
 void ImapProtocol::incomingData()
 {
+    if (!_lineBuffer.isEmpty() && _transport->imapCanReadLine()) {
+        processResponse(QString::fromLatin1(_lineBuffer + _transport->imapReadLine()));
+        _lineBuffer.clear();
+    }
+
     int readLines = 0;
     while (_transport->imapCanReadLine()) {
         processResponse(QString::fromLatin1(_transport->imapReadLine()));
@@ -3328,6 +3333,11 @@ void ImapProtocol::incomingData()
             _incomingDataTimer.start(0);
             return;
         }
+    }
+
+    if (_transport->bytesAvailable()) {
+        // If there is an incomplete line, read it from the socket buffer to ensure we get readyRead signal next time
+        _lineBuffer.append(_transport->readAll());
     }
 
     _incomingDataTimer.stop();
