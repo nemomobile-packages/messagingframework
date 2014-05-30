@@ -2665,6 +2665,10 @@ bool SSOAccountSatisfyTheProperty(Accounts::Account* ssoAccount, const QMailAcco
             status &= (~QMailAccount::CanTransmit);
             status |= canTransmit?(QMailAccount::CanTransmit):0;
 
+            bool appendSignature = ssoAccount->valueAsBool("signatureEnabled", true);
+            status &= (~QMailAccount::AppendSignature);
+            status |= appendSignature?(QMailAccount::AppendSignature):0;
+
             return SSOAccountCompareProperty<quint64>(ssoAccount,
                                                       status,
                                                       argument.op, argument.valueList);
@@ -3632,10 +3636,12 @@ QMailAccount QMailStorePrivate::extractAccount(const QSharedPointer<Accounts::Ac
     ssoAccount->selectService(service);
     const bool& isDefault = ssoAccount->valueAsBool("email/default");
     const bool& canTransmit = ssoAccount->valueAsBool("canTransmit", true);
+    const bool& appendSignature = ssoAccount->valueAsBool("signatureEnabled", true);
 
     result.setStatus(QMailAccount::Enabled, enabled);
     result.setStatus(QMailAccount::PreferredSender, isDefault);
     result.setStatus(QMailAccount::CanTransmit, canTransmit);
+    result.setStatus(QMailAccount::AppendSignature, appendSignature);
 
     result.setSignature(ssoAccount->valueAsString("signature"));
     result.setFromAddress(ssoAccount->contains("fullName")?
@@ -6136,6 +6142,8 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccou
     ssoAccount->setEnabled(true); // service is enabled anyway
     ssoAccount->setValue("type", static_cast<int>(account->messageType()));
     ssoAccount->setValue("status", account->status());
+    const bool appendSignature = (account->status() & QMailAccount::AppendSignature);
+    ssoAccount->setValue("signatureEnabled", appendSignature);
     ssoAccount->setValue("signature", account->signature());
     ssoAccount->setValue("emailaddress", account->fromAddress().address());
     ssoAccount->setValue("fullName", account->fromAddress().name());
@@ -6936,6 +6944,8 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
         ssoAccount->selectService(service);
         ssoAccount->setValue("type", static_cast<int>(account->messageType()));
         ssoAccount->setValue("status", account->status());
+        bool signatureEnabled = account->status() & QMailAccount::AppendSignature;
+        ssoAccount->setValue("signatureEnabled", signatureEnabled);
         ssoAccount->setValue("signature", account->signature());
         ssoAccount->setValue("emailaddress", account->fromAddress().address());
         ssoAccount->setValue("fullName", account->fromAddress().name());
