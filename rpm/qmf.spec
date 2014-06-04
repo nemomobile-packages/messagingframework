@@ -164,7 +164,7 @@ This package contains the documentation for Qt Messaging Framework (QMF).
     DEFINES+=MESSAGESERVER_PLUGINS \
     CONFIG+=syslog 
 
-make %{?jobs:-j%jobs}
+make %{?_smp_mflags}
 
 # >> build post
 # << build post
