@@ -6,7 +6,7 @@ SUBDIRS = \
     messageservices/qmfsettings \
     contentmanagers/qmfstoragemanager
 
-packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
+packagesExist(accounts-qt5) {
     SUBDIRS += ssoauth/password
 }
 

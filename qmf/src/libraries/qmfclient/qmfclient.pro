@@ -170,7 +170,7 @@ TRANSLATIONS += libqtopiamail-ar.ts \
                 libqtopiamail-zh_CN.ts \
                 libqtopiamail-zh_TW.ts
 
-packagesExist(accounts-qt) | packagesExist(accounts-qt5) {
+packagesExist(accounts-qt5) {
 
     PUBLIC_HEADERS += \
                ssoaccountmanager.h \
