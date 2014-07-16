@@ -2,39 +2,20 @@ CONFIG(debug,debug|release) {
     DEFINES += QMF_ENABLE_LOGGING
 }
 
-equals(QT_MAJOR_VERSION, 4) {
-    packagesExist(accounts-qt) {
-        packagesExist(libsignon-qt) {
-            DEFINES += USE_ACCOUNTS_QT
-            CONFIG += link_pkgconfig
-            QT += xml
-            # accounts dependencies
-            PKGCONFIG += accounts-qt
-            # sso dependencies
-            PKGCONFIG += libsignon-qt
-        } else {
-            warning("Accounts-qt support requires libsignon-qt")
-        }
+packagesExist(accounts-qt5) {
+    packagesExist(libsignon-qt5) {
+        DEFINES += USE_ACCOUNTS_QT
+        CONFIG += link_pkgconfig
+        QT += xml
+        # accounts dependencies
+        PKGCONFIG += accounts-qt5
+        # sso dependencies
+        PKGCONFIG += libsignon-qt5
     } else {
-         warning("Accounts-qt support requires accounts-qt")
+        warning("Accounts-qt support requires libsignon-qt5")
     }
-}
-equals(QT_MAJOR_VERSION, 5) {
-    packagesExist(accounts-qt5) {
-        packagesExist(libsignon-qt5) {
-            DEFINES += USE_ACCOUNTS_QT
-            CONFIG += link_pkgconfig
-            QT += xml
-            # accounts dependencies
-            PKGCONFIG += accounts-qt5
-            # sso dependencies
-            PKGCONFIG += libsignon-qt5
-        } else {
-            warning("Accounts-qt support requires libsignon-qt5")
-        }
-    } else {
-         warning("Accounts-qt support requires accounts-qt5")
-    }
+} else {
+     warning("Accounts-qt support requires accounts-qt5")
 }
 
 win32 | macx {
