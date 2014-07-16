@@ -393,8 +393,20 @@ void SmtpClient::sendCommands(const QStringList &cmds)
 
 void SmtpClient::incomingData()
 {
+    bool processIncompleteLine = false;
+    if (!lineBuffer.isEmpty() && transport->canReadLine()) {
+        processIncompleteLine = true;
+    }
+
     while (transport->canReadLine()) {
-        QString response = transport->readLine();
+        QString response;
+        if (processIncompleteLine) {
+            processIncompleteLine = false;
+            response = QString::fromLatin1(lineBuffer + transport->readLine());
+            lineBuffer.clear();
+        } else {
+            response = QString::fromLatin1(transport->readLine());
+        }
         qMailLog(SMTP) << "RECV:" << response.left(response.length() - 2) << flush;
 
         delete authTimeout;
@@ -421,6 +433,11 @@ void SmtpClient::incomingData()
         } else {
             nextAction(response);
         }
+    }
+
+    if (transport->bytesAvailable()) {
+        // If there is an incomplete line, read it from the socket buffer to ensure we get readyRead signal next time
+        lineBuffer.append(transport->readAll());
     }
 }
 
