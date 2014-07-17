@@ -478,22 +478,33 @@ void PopClient::sendCommand(const QByteArray& cmd)
     sendCommand(cmd.data(), cmd.length());
 }
 
-QString PopClient::readResponse() 
-{
-    QString response = QString::fromLatin1(transport->readLine());
-
-    if ((response.length() > 1) && (status != MessageDataRetr) && (status != MessageDataTop)) {
-        qMailLog(POP) << "RECV:" << qPrintable(response.left(response.length() - 2));
-    }
-
-    return response;
-}
-
 void PopClient::incomingData()
 {
+    bool processIncompleteLine = false;
+    if (!lineBuffer.isEmpty() && transport->canReadLine()) {
+        processIncompleteLine = true;
+    }
+
     while (transport && transport->canReadLine()) {
-        QString response = readResponse();
+        QString response;
+        if (processIncompleteLine) {
+            processIncompleteLine = false;
+            response = QString::fromLatin1(lineBuffer + transport->readLine());
+            lineBuffer.clear();
+        } else {
+            response = QString::fromLatin1(transport->readLine());
+        }
+
+        if ((response.length() > 1) && (status != MessageDataRetr) && (status != MessageDataTop)) {
+            qMailLog(POP) << "RECV:" << qPrintable(response.left(response.length() - 2));
+        }
+
         processResponse(response);
+    }
+
+    if (transport->bytesAvailable()) {
+        // If there is an incomplete line, read it from the socket buffer to ensure we get readyRead signal next time
+        lineBuffer.append(transport->readAll());
     }
 }
 

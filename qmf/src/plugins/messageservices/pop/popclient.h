@@ -99,6 +99,7 @@ public:
 #endif
 
 signals:
+    void connectionError(QMailServiceAction::Status::ErrorCode status, const QString &msg);
     void errorOccurred(int, const QString &);
     void errorOccurred(QMailServiceAction::Status::ErrorCode, const QString &);
     void updateStatus(const QString &);
@@ -138,7 +139,6 @@ private:
     void sendCommand(const char *data, int len = -1);
     void sendCommand(const QString& cmd);
     void sendCommand(const QByteArray& cmd);
-    QString readResponse();
     void processResponse(const QString &response);
     void nextAction();
     void retrieveOperationCompleted();
@@ -184,6 +184,7 @@ private:
     LongStream *dataStream;
 
     QMailTransport *transport;
+    QByteArray lineBuffer;
 
     QString retrieveUid;
 
