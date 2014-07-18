@@ -11,7 +11,6 @@ BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(icu-i18n)
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Gui)
-BuildRequires:  pkgconfig(Qt5Widgets)
 BuildRequires:  pkgconfig(Qt5Test)
 BuildRequires: 	pkgconfig(Qt5Network)
 #BuildRequires: pkgconfig(Qt5Webkit)
@@ -34,7 +33,6 @@ that interacts with email and mail servers.
 Summary:    Qt Messaging Framework (QMF) Qt5 - development files
 Group:      Development/Libraries
 Requires:   libqmfmessageserver1-qt5 = %{version}
-Requires:   libqmfutil1-qt5 = %{version}
 Requires:   libqmfclient1-qt5 = %{version}
 
 %description devel
@@ -71,21 +69,6 @@ This package contains:
  - a server application supporting multiple messaging transport mechanisms.
 
 
-%package -n libqmfutil1-qt5
-Summary:    Qt Messaging Framework (QMF) messaging client utility library
-Group:      System/Libraries
-Requires(post): /sbin/ldconfig
-Requires(postun): /sbin/ldconfig
-
-%description -n libqmfutil1-qt5
-The Qt Messaging Framework, QMF, consists of a C++ library and daemon server
-process that can be used to build email clients, and more generally software
-that interacts with email and mail servers.
-
-This package contains the messaging client utility library. It provides
-assistance in developing plugins for the Message Server daemon.
-
-
 %package -n libqmfclient1-qt5
 Summary:    Qt Messaging Framework (QMF) client library
 Group:      System/Libraries
@@ -106,22 +89,6 @@ client applications.
 
 This package contains a library for developing applications that work with
 messages.
-
-
-%package examples
-Summary:    Qt Messaging Framework (QMF) examples
-Group:      System/X11
-
-%description examples
-The Qt Messaging Framework, QMF, consists of a C++ library and daemon server
-process that can be used to build email clients, and more generally software
-that interacts with email and mail servers.
-
-The Messages example client application provides an implementation of standard
-functionality for creating and viewing messages.
-
-This package contains an example client application supporting common
-messaging functionality.
 
 
 %package tests
@@ -161,6 +128,7 @@ This package contains the documentation for Qt Messaging Framework (QMF).
     QMF_INSTALL_ROOT=%{_prefix} \
     DEFINES+=QMF_ENABLE_LOGGING \
     DEFINES+=MESSAGESERVER_PLUGINS \
+    DEFINES+=QMF_NO_MESSAGE_SERVICE_EDITOR \
     CONFIG+=syslog
 
 make %{?_smp_mflags}
@@ -186,10 +154,6 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 
 %postun -n libqmfmessageserver1-qt5 -p /sbin/ldconfig
 
-%post -n libqmfutil1-qt5 -p /sbin/ldconfig
-
-%postun -n libqmfutil1-qt5 -p /sbin/ldconfig
-
 %post -n libqmfclient1-qt5 -p /sbin/ldconfig
 
 %postun -n libqmfclient1-qt5 -p /sbin/ldconfig
@@ -206,7 +170,6 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 %{_includedir}/qmfclient5/sso*.h
 %{_libdir}/libqmfmessageserver5.prl
 %{_libdir}/libqmfmessageserver5.so
-%{_libdir}/libqmfutil5.so
 %{_libdir}/libqmfclient5.prl
 %{_libdir}/libqmfclient5.so
 %{_libdir}/pkgconfig/qmfmessageserver5.pc
@@ -227,12 +190,6 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 %{_libdir}/systemd/user/user-session.target.wants/messageserver5.service
 # << files libqmfmessageserver1-qt5
 
-%files -n libqmfutil1-qt5
-%defattr(-,root,root,-)
-# >> files libqmfutil1-qt5
-%{_libdir}/libqmfutil5.so.*
-# << files libqmfutil1-qt5
-
 %files -n libqmfclient1-qt5
 %defattr(-,root,root,-)
 # >> files libqmfclient1-qt5
@@ -240,16 +197,6 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 %{_libdir}/qmf/plugins5/contentmanagers/libqmfstoragemanager.so
 %{_libdir}/qmf/plugins5/ssoauth/libpasswordplugin.so
 # << files libqmfclient1-qt5
-
-%files examples
-%defattr(-,root,root,-)
-# >> files examples
-%{_bindir}/messagingaccounts5
-%{_bindir}/qtmail5
-%{_bindir}/serverobserver5
-%{_libdir}/qmf/plugins5/composers/libemailcomposer.so
-%{_libdir}/qmf/plugins5/viewers/libgenericviewer.so
-# << files examples
 
 %files tests
 %defattr(-,root,root,-)
