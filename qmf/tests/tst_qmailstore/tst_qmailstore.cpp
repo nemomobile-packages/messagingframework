@@ -56,6 +56,9 @@
     This class tests that QMailStore correctly handles addition, updates, removal, counting and
     querying of QMailMessages and QMailFolders.
 */
+
+Q_DECLARE_METATYPE(QMailMessageKey::Properties)
+
 class tst_QMailStore : public QObject
 {
     Q_OBJECT
@@ -87,13 +90,17 @@ private slots:
     void message();
     void implementationbase();
 
+#ifdef USE_ACCOUNTS_QT
 private:
     static const QSet<QString> defaultMailServices;
+#endif
 };
 
+#ifdef USE_ACCOUNTS_QT
 // Keep in sync with src/libraries/qmfclient/share/email.service
 const QSet<QString> tst_QMailStore::defaultMailServices =
     QSet<QString>() << "auth";
+#endif
 
 QTEST_MAIN(tst_QMailStore)
 
@@ -112,6 +119,7 @@ tst_QMailStore::~tst_QMailStore()
 void tst_QMailStore::initTestCase()
 {
     QMailStore::instance()->clearContent();
+    qRegisterMetaType<QMailMessageKey::Properties>("QMailMessageKeyProperties");
 }
 
 void tst_QMailStore::cleanup()
@@ -183,12 +191,22 @@ void tst_QMailStore::addAccount()
 
     QMailAccountConfiguration config2(account1.id());
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+
+#ifdef USE_ACCOUNTS_QT
     QCOMPARE(config2.services().toSet(), config1.services().toSet() + defaultMailServices);
     foreach (const QString &service, config2.services().toSet() - defaultMailServices) {
         if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
             QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
         } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
     }
+#else
+    QCOMPARE(config2.services(), config1.services());
+    foreach (const QString &service, config2.services()) {
+        if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
+            QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
+        } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
+    }
+#endif
 
     QCOMPARE(QMailStore::instance()->countAccounts(QMailAccountKey::id(account1.id())), 1);
     QCOMPARE(QMailStore::instance()->countAccounts(QMailAccountKey::id(account1.id(), QMailDataComparator::NotEqual)), 0);
@@ -728,12 +746,21 @@ void tst_QMailStore::updateAccount()
 
     QMailAccountConfiguration config2(account1.id());
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+#ifdef USE_ACCOUNTS_QT
     QCOMPARE(config2.services().toSet(), config1.services().toSet() + defaultMailServices);
     foreach (const QString &service, config2.services().toSet() - defaultMailServices) {
         if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
             QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
         } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
     }
+#else
+    QCOMPARE(config2.services(), config1.services());
+    foreach (const QString &service, config2.services()) {
+        if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
+            QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
+        } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
+    }
+#endif
 }
 
 void tst_QMailStore::updateFolder()
@@ -1153,8 +1180,12 @@ void tst_QMailStore::updateMessage()
 
 void tst_QMailStore::updateMessages()
 {
+    QSignalSpy spyMessagesAdded(QMailStore::instance(), SIGNAL(messagesAdded(QMailMessageIdList)));
     QSignalSpy spyMessagesUpdated(QMailStore::instance(), SIGNAL(messagesUpdated(QMailMessageIdList)));
     QSignalSpy spyMessagesDataUpdated(QMailStore::instance(), SIGNAL(messageDataUpdated(QMailMessageMetaDataList)));
+    QSignalSpy spyMessagePropertyUpdated(QMailStore::instance(), SIGNAL(messagePropertyUpdated(QMailMessageIdList, QMailMessageKeyProperties, QMailMessageMetaData)));
+    QSignalSpy spyMessageStatusUpdated(QMailStore::instance(), SIGNAL(messageStatusUpdated(QMailMessageIdList, quint64, bool)));
+
 
     QMailAccount account;
     account.setName("Account");
@@ -1231,8 +1262,35 @@ void tst_QMailStore::updateMessages()
     }
 
     //Verify that the signals are only emitted once
+    QCOMPARE(spyMessagesAdded.count(), 1);
     QCOMPARE(spyMessagesUpdated.count(), 1);
     QCOMPARE(spyMessagesDataUpdated.count(), 1);
+    // Verify that was not emitted since we didn't modify message metadata directly
+    QCOMPARE(spyMessagePropertyUpdated.count(),0);
+    QCOMPARE(spyMessageStatusUpdated.count(), 0);
+
+    QMailMessageMetaData data;
+    data.setCustomField("answer", "Fido");
+    data.setCustomField("bicycle", "fish");
+
+    QVERIFY(QMailStore::instance()->updateMessagesMetaData(QMailMessageKey(), QMailMessageKey::Custom, data));
+    QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+
+    // Message was update
+    QCOMPARE(spyMessagesUpdated.count(), 2);
+    // Properties were updated
+    QCOMPARE(spyMessagePropertyUpdated.count(),1);
+    // Status was not updated
+    QCOMPARE(spyMessageStatusUpdated.count(), 0);
+
+    QVERIFY(QMailStore::instance()->updateMessagesMetaData(QMailMessageKey(), QMailMessage::Read, false));
+    QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+    // Message was update
+    QCOMPARE(spyMessagesUpdated.count(), 3);
+    // Properties were not updated
+    QCOMPARE(spyMessagePropertyUpdated.count(),1);
+    // Status was updated
+    QCOMPARE(spyMessageStatusUpdated.count(), 1);
 }
 
 void tst_QMailStore::removeAccount()
@@ -1281,12 +1339,21 @@ void tst_QMailStore::removeAccount()
 
     QMailAccountConfiguration config2(account2.id());
     QCOMPARE(QMailStore::instance()->lastError(), QMailStore::NoError);
+#ifdef USE_ACCOUNTS_QT
     QCOMPARE(config2.services().toSet(), config1.services().toSet() + defaultMailServices);
     foreach (const QString &service, config2.services().toSet() - defaultMailServices) {
         if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
             QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
         } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
     }
+#else
+    QCOMPARE(config2.services(), config1.services());
+    foreach (const QString &service, config2.services()) {
+        if (QMailAccountConfiguration::ServiceConfiguration *svcCfg = &config2.serviceConfiguration(service)) {
+            QCOMPARE(svcCfg->values(), config1.serviceConfiguration(service).values());
+        } else QFAIL(qPrintable(QString("no config for %1!").arg(service)));
+    }
+#endif
 
     // Verify that removal is successful 
     QVERIFY(QMailStore::instance()->removeAccount(account1.id()));
