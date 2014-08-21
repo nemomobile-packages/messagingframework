@@ -210,7 +210,6 @@ void ImapConfiguration::setSearchLimit(int limit)
 
 bool ImapConfiguration::acceptUntrustedCertificates() const
 {
-    qDebug() << Q_FUNC_INFO << value("acceptUntrustedCertificates", "0");
     return (value("acceptUntrustedCertificates", "0").toInt() != 0);
 }
 
