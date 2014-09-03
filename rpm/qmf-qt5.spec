@@ -1,6 +1,6 @@
 Name: qmf-qt5
 Summary:    Qt Messaging Framework (QMF) Qt5
-Version:    4.0.4+git24
+Version:    4.0.4+git25
 Release:    1
 Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
