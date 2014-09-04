@@ -148,6 +148,7 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
     account->selectService(emailServices.first());
     Accounts::AccountService* emailService = new Accounts::AccountService(account, account->selectedService());
     Accounts::AuthData auth = emailService->authData();
+    delete emailService;
     _accountProvider = account->providerName();
     _authMethod = auth.method();
     _authMechanism = auth.mechanism();
