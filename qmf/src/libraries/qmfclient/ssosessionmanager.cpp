@@ -134,7 +134,7 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
     _accountId = id.toULongLong();
 
     SSOAccountManager manager;
-    Accounts::Account* account = manager->account(static_cast<Accounts::AccountId>(_accountId));
+    QScopedPointer<Accounts::Account> account(manager->account(static_cast<Accounts::AccountId>(_accountId)));
     if (!account)
         return false;
 
@@ -146,7 +146,7 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
     }
 
     account->selectService(emailServices.first());
-    Accounts::AccountService* emailService = new Accounts::AccountService(account, account->selectedService());
+    Accounts::AccountService* emailService = new Accounts::AccountService(account.data(), account->selectedService());
     Accounts::AuthData auth = emailService->authData();
     delete emailService;
     _accountProvider = account->providerName();
