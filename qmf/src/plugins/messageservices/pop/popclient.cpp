@@ -502,7 +502,7 @@ void PopClient::incomingData()
         processResponse(response);
     }
 
-    if (transport->bytesAvailable()) {
+    if (transport && transport->bytesAvailable()) {
         // If there is an incomplete line, read it from the socket buffer to ensure we get readyRead signal next time
         lineBuffer.append(transport->readAll());
     }
