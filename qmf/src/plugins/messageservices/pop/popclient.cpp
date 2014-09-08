@@ -266,7 +266,6 @@ void PopClient::setAccount(const QMailAccountId &id)
     if (!ssoSessionManager) {
         PopConfiguration popCfg(config);
         ssoSessionManager = new SSOSessionManager(this);
-        ssoSessionManager->createSsoIdentity(id, "pop3", popCfg.mailEncryption());
         if (ssoSessionManager->createSsoIdentity(id, "pop3", popCfg.mailEncryption())) {
             ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionResponse(QList<QByteArray>))
                             ,this, SLOT(onSsoSessionResponse(QList<QByteArray>))));
