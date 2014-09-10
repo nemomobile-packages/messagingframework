@@ -76,8 +76,12 @@ protected slots:
     virtual void accountsUpdated(const QMailAccountIdList &ids);
     void errorOccurred(int code, const QString &text);
     void errorOccurred(QMailServiceAction::Status::ErrorCode code, const QString &text);
-
     void updateStatus(const QString& text);
+
+#ifdef USE_KEEPALIVE
+    void onUpdateLastSyncTime();
+    void stopPushEmail();
+#endif
 
 private:
     class Source;
@@ -96,6 +100,11 @@ private:
     enum { ThirtySeconds = 30 };
     static QMap<QMailAccountId, int> _initiatePushDelay; // Limit battery consumption
     QTimer *_initiatePushEmailTimer;
+#ifdef USE_KEEPALIVE
+    BackgroundActivity* _backgroundActivity;
+    int _lastSyncCounter;
+    bool _idling;
+#endif
 };
 
 class ImapServicePlugin : public QMailMessageServicePlugin

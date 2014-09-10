@@ -21,6 +21,10 @@ equals(QT_MAJOR_VERSION, 5) {
 
 QT = core network
 
+contains(DEFINES, USE_KEEPALIVE) {
+    PKGCONFIG += keepalive
+}
+
 contains(DEFINES,QT_QMF_USE_ALIGNEDTIMER) {
     QT += alignedtimer
 }

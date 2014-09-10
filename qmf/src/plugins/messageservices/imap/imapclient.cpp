@@ -347,7 +347,7 @@ private:
 
 #ifdef USE_ACCOUNTS_QT
 IdleProtocol::IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QByteArray &ssoLogin)
-    :_idleRetryDelay(InitialIdleRetryDelay),
+    : _idleRetryDelay(InitialIdleRetryDelay),
       _ssoAccount(ssoAccount),
       _ssoLogin(ssoLogin)
 {
@@ -2099,6 +2099,9 @@ void ImapClient::closeIdleConnections()
     qMailLog(IMAP) << Q_FUNC_INFO << "Account was modified. Closing connections";
 
     closeConnection();
+#ifdef USE_KEEPALIVE
+    emit stopPushEmail();
+#endif
     // closing idle connections
     foreach(const QMailFolderId &id, _monitored.keys()) {
         IdleProtocol *protocol = _monitored.take(id);
