@@ -59,6 +59,9 @@
 #include <ssosessionmanager.h>
 #endif
 
+#ifdef USE_KEEPALIVE
+#include <keepalive/backgroundactivity.h>
+#endif
 
 class ImapStrategy;
 class ImapStrategyContext;
@@ -115,6 +118,9 @@ signals:
     void errorOccurred(QMailServiceAction::Status::ErrorCode, const QString &);
     void updateStatus(const QString &);
     void restartPushEmail();
+#ifdef USE_KEEPALIVE
+    void stopPushEmail();
+#endif
 
     void progressChanged(uint, uint);
     void retrievalCompleted();

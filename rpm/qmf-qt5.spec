@@ -1,6 +1,6 @@
 Name: qmf-qt5
 Summary:    Qt Messaging Framework (QMF) Qt5
-Version:    4.0.4+git27
+Version:    4.0.4+git28
 Release:    1
 Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
@@ -17,6 +17,7 @@ BuildRequires: 	pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(accounts-qt5)
 BuildRequires:  pkgconfig(libsignon-qt5)
+BuildRequires:  pkgconfig(keepalive)
 #Needed for qhelpgenerator
 BuildRequires:  qt5-qttools-qthelp-devel
 BuildRequires:  qt5-plugin-platform-minimal
@@ -129,6 +130,7 @@ This package contains the documentation for Qt Messaging Framework (QMF).
     DEFINES+=QMF_ENABLE_LOGGING \
     DEFINES+=MESSAGESERVER_PLUGINS \
     DEFINES+=QMF_NO_MESSAGE_SERVICE_EDITOR \
+    DEFINES+=USE_KEEPALIVE \
     CONFIG+=syslog
 
 make %{?_smp_mflags}
