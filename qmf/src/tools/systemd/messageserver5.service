@@ -1,11 +1,12 @@
 [Unit]
 Description=messageserver5
-Requires=booster-generic.service 
+Requires=messageserver5-accounts-check.service
+Requires=booster-generic.service
 After=booster-generic.service
+After=messageserver5-accounts-check.service
 
 [Service]
 Type=simple
-ExecStartPre=/usr/bin/qmf-accountscheck
 ExecStart=/usr/bin/invoker -o --type=generic --global-syms /usr/bin/messageserver5
 Restart=on-failure
 RestartSec=1

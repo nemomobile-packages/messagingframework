@@ -146,6 +146,7 @@ rm -rf %{buildroot}
 UNIT_DIR=%{buildroot}%{_libdir}/systemd/user/user-session.target.wants
 mkdir -p "$UNIT_DIR"
 ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
+ln -sf ../messageserver5-accounts-check.service "$UNIT_DIR/messageserver5-accounts-check.service"
 
 # >> install post
 # << install post
@@ -189,7 +190,9 @@ ln -sf ../messageserver5.service "$UNIT_DIR/messageserver5.service"
 %{_libdir}/qmf/plugins5/messageservices/libqmfsettings.so
 %{_libdir}/qmf/plugins5/messageservices/libsmtp.so
 %{_libdir}/systemd/user/messageserver5.service
+%{_libdir}/systemd/user/messageserver5-accounts-check.service
 %{_libdir}/systemd/user/user-session.target.wants/messageserver5.service
+%{_libdir}/systemd/user/user-session.target.wants/messageserver5-accounts-check.service
 # << files libqmfmessageserver1-qt5
 
 %files -n libqmfclient1-qt5
