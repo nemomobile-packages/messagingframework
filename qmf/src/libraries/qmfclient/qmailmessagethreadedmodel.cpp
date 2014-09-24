@@ -83,6 +83,10 @@ public:
     QMailMessageSortKey sortKey() const;
     void setSortKey(const QMailMessageSortKey& sortKey);
 
+    uint limit() const;
+    void setLimit(uint limit);
+    int totalCount() const;
+
     bool isEmpty() const;
 
     int rowCount(const QModelIndex& idx) const;
@@ -134,6 +138,7 @@ private:
     mutable QList<QMailMessageId> _currentIds;
     mutable bool _initialised;
     mutable bool _needSynchronize;
+    int _limit;
 };
 
 
@@ -148,7 +153,8 @@ QMailMessageThreadedModelPrivate::QMailMessageThreadedModelPrivate(QMailMessageT
     _ignoreUpdates(ignoreUpdates),
     _root(QMailMessageId()),
     _initialised(false),
-    _needSynchronize(true)
+    _needSynchronize(true),
+    _limit(0)
 {
 }
 
@@ -174,6 +180,26 @@ QMailMessageSortKey QMailMessageThreadedModelPrivate::sortKey() const
 void QMailMessageThreadedModelPrivate::setSortKey(const QMailMessageSortKey& sortKey) 
 {
     _sortKey = sortKey;
+}
+
+uint QMailMessageThreadedModelPrivate::limit() const
+{
+   return _limit;
+}
+
+void QMailMessageThreadedModelPrivate::setLimit(uint limit)
+{
+    _limit = limit;
+}
+
+int QMailMessageThreadedModelPrivate::totalCount() const
+{
+    if (_limit) {
+        return QMailStore::instance()->countMessages(_key);
+    } else {
+        init();
+        return _root._children.count();
+    }
 }
 
 bool QMailMessageThreadedModelPrivate::isEmpty() const
@@ -323,7 +349,7 @@ bool QMailMessageThreadedModelPrivate::addMessages(const QMailMessageIdList &ids
     // when this event was recorded and when we're processing the signal.
     
     QMailMessageKey idKey(QMailMessageKey::id(_currentIds + ids));
-    const QMailMessageIdList newIds(QMailStore::instance()->queryMessages(_key & idKey, _sortKey));
+    const QMailMessageIdList newIds(QMailStore::instance()->queryMessages(_key & idKey, _sortKey, _limit));
 
     // Find which of the messages we must add (in ascending insertion order)
     QList<int> validIndices;
@@ -363,6 +389,11 @@ bool QMailMessageThreadedModelPrivate::addMessages(const QMailMessageIdList &ids
             continue;
         }
 
+        // Stop processing messages if we reached the limit
+        if(_limit && _root._children.count() >= _limit) {
+            break;
+        }
+
         QMailMessageId messageId(id);
         QList<QMailMessageId> descendants;
 
@@ -373,6 +404,11 @@ bool QMailMessageThreadedModelPrivate::addMessages(const QMailMessageIdList &ids
         }
 
         do {
+            // Stop processing messages if we reached the limit
+            if(_limit && _root._children.count() >= _limit) {
+                break;
+            }
+
             int messagePos = newIds.indexOf(messageId);
 
             QMailMessageThreadedModelItem *insertParent = 0;
@@ -470,7 +506,7 @@ bool QMailMessageThreadedModelPrivate::updateMessages(const QMailMessageIdList &
     QSet<QMailMessageId> existingIds(_currentIds.toSet());
 
     QMailMessageKey idKey(QMailMessageKey::id((existingIds + ids.toSet()).toList()));
-    QMailMessageIdList newIds(QMailStore::instance()->queryMessages(_key & idKey, _sortKey));
+    QMailMessageIdList newIds(QMailStore::instance()->queryMessages(_key & idKey, _sortKey, _limit));
 
     QSet<QMailMessageId> currentIds(newIds.toSet());
 
@@ -758,7 +794,7 @@ void QMailMessageThreadedModelPrivate::init() const
         }
 
         // Now find all the messages we're going to show, in order
-        const QMailMessageIdList ids = QMailStore::instance()->queryMessages(_key, _sortKey);
+        const QMailMessageIdList ids = QMailStore::instance()->queryMessages(_key, _sortKey, _limit);
         QHash<QMailMessageId, int> idIndexMap;
         idIndexMap.reserve(ids.count());
         int i;

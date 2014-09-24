@@ -59,6 +59,10 @@ public:
     virtual QMailMessageSortKey sortKey() const = 0;
     virtual void setSortKey(const QMailMessageSortKey& sortKey) = 0;
 
+    virtual uint limit() const = 0;
+    virtual void setLimit(uint limit) = 0;
+    virtual int totalCount() const = 0;
+
     virtual bool isEmpty() const = 0;
 
     virtual int rowCount(const QModelIndex& idx) const = 0;
@@ -117,6 +121,10 @@ public:
 
     QMailMessageSortKey sortKey() const;
     void setSortKey(const QMailMessageSortKey& sortKey);
+
+    uint limit() const;
+    void setLimit(uint limit);
+    int totalCount() const;
 
     QMailMessageId idFromIndex(const QModelIndex& index) const;
     QModelIndex indexFromId(const QMailMessageId& id) const;
