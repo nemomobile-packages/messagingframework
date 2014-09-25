@@ -6086,7 +6086,6 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::accountCustomFields(QSharedP
 {
     ssoAccount->beginGroup("customFields");
     foreach (const QString& key, ssoAccount->allKeys()) {
-        qMailLog(Messaging) << "Custom Field:" << key << "=" << ssoAccount->valueAsString(key);
         fields->insert(key, ssoAccount->valueAsString(key));
     }
     ssoAccount->endGroup();
