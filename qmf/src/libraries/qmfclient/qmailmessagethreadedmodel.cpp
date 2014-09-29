@@ -195,7 +195,6 @@ void QMailMessageThreadedModelPrivate::setLimit(uint limit)
             // Do full refresh
             _limit = limit;
             _model.fullRefresh(false);
-            return;
         } else if (_limit > limit) {
             // Limit decreased, remove messages in excess
             _limit = limit;
@@ -422,11 +421,6 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
             continue;
         }
 
-        // Stop processing messages if we reached the limit
-        if(_limit && _root._children.count() >= (int)_limit) {
-            break;
-        }
-
         QMailMessageId messageId(id);
         QList<QMailMessageId> descendants;
 
@@ -437,10 +431,6 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
         }
 
         do {
-            // Stop processing messages if we reached the limit
-            if(_limit && _root._children.count() >= (int)_limit) {
-                break;
-            }
 
             int messagePos = newIdsList.indexOf(messageId);
 
@@ -482,6 +472,11 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
 
                 QModelIndex parentIndex = indexFromItem(insertParent);
 
+                // Since we insert the parents first, if index is bigger than
+                // the limit we stop the loop
+                if(_limit && insertIndex > (int)_limit) {
+                     break;
+                }
                 _model.emitBeginInsertRows(parentIndex, insertIndex, insertIndex);
                 insertItemAt(insertIndex, parentIndex, messageId);
                 _model.emitEndInsertRows();
@@ -504,6 +499,12 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
                 }
             }
         } while (messageId.isValid());
+    }
+
+    // Check if we passed the model limit, if so remove exceeding messages
+    if (_limit && _currentIds.count() > (int)_limit) {
+        QMailMessageIdList idsToRemove = _currentIds.mid(_limit);
+        removeMessages(idsToRemove, 0);
     }
 
     return true;

@@ -156,12 +156,11 @@ uint QMailMessageListModelPrivate::limit() const
 
 void QMailMessageListModelPrivate::setLimit(uint limit)
 {
-    if( _limit != limit) {
+    if(_limit != limit) {
         if (limit == 0) {
             // Do full refresh
             _limit = limit;
             _model.fullRefresh(false);
-            return;
         } else if (_limit > limit) {
             // Limit decreased, remove messages in excess
             _limit = limit;
@@ -363,8 +362,9 @@ bool QMailMessageListModelPrivate::appendMessages(const QMailMessageIdList &idsT
 
     qSort(insertIndices);
     foreach (int index, insertIndices) {
-        // Stop processing messages if we reached the limit
-        if(_limit && _idList.count() >= (int)_limit) {
+        // Since the list is ordered, if index is bigger than the limit
+        // we stop inserting
+        if(_limit && index > (int)_limit) {
             break;
         }
         _model.emitBeginInsertRows(QModelIndex(), index, index);
@@ -372,6 +372,11 @@ bool QMailMessageListModelPrivate::appendMessages(const QMailMessageIdList &idsT
         _model.emitEndInsertRows();
     }
 
+    // Check if we passed the model limit, if so remove exceeding messages
+    if (_limit && _idList.count() > (int)_limit) {
+        QMailMessageIdList idsToRemove = _idList.mid(_limit);
+        removeMessages(idsToRemove);
+    }
     return true;
 }
 
@@ -477,13 +482,20 @@ bool QMailMessageListModelPrivate::updateMessages(const QMailMessageIdList &ids)
 
     qSort(insertIndices);
     foreach (int index, insertIndices) {
-        // Stop processing messages if we reached the limit
-        if(_limit && _idList.count() >= (int)_limit) {
+        // Since the list is ordered, if index is bigger than the limit
+        // we stop inserting
+        if(_limit && index > (int)_limit) {
             break;
         }
         _model.emitBeginInsertRows(QModelIndex(), index, index);
         insertItemAt(index, QModelIndex(), indexId[index]);
         _model.emitEndInsertRows();
+    }
+
+    // Check if we passed the model limit, if so remove exceeding messages
+    if (_limit && _idList.count() > (int)_limit) {
+        QMailMessageIdList idsToRemove = _idList.mid(_limit);
+        removeMessages(idsToRemove);
     }
 
     qSort(updateIndices);
