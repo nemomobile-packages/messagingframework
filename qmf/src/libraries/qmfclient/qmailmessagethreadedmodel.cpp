@@ -110,7 +110,7 @@ public:
     bool processMessagesRemoved(const QMailMessageIdList &ids);
 
     bool addMessages(const QMailMessageIdList &ids);
-    bool appendMessages(const QMailMessageIdList &ids, const QMailMessageIdList &newIds);
+    bool appendMessages(const QMailMessageIdList &idsToAppend, const QMailMessageIdList &newIdsList);
     bool updateMessages(const QMailMessageIdList &ids);
     bool removeMessages(const QMailMessageIdList &ids, QMailMessageIdList *readditions);
 
@@ -139,7 +139,7 @@ private:
     mutable QList<QMailMessageId> _currentIds;
     mutable bool _initialised;
     mutable bool _needSynchronize;
-    int _limit;
+    uint _limit;
 };
 
 
@@ -190,17 +190,30 @@ uint QMailMessageThreadedModelPrivate::limit() const
 
 void QMailMessageThreadedModelPrivate::setLimit(uint limit)
 {
-    _limit = limit;
+    if( _limit != limit) {
+        if (limit == 0) {
+            // Do full refresh
+            _limit = limit;
+            _model.fullRefresh(false);
+            return;
+        } else if (_limit > limit) {
+            // Limit decreased, remove messages in excess
+            _limit = limit;
+            QMailMessageIdList idsToRemove = _currentIds.mid(limit);
+            removeMessages(idsToRemove, 0);
+        } else {
+            _limit = limit;
+            QMailMessageIdList idsToAppend;
+            QMailMessageIdList newIdsList(QMailStore::instance()->queryMessages(_key, _sortKey, _limit));
 
-    QMailMessageIdList ids;
-    QMailMessageIdList newIds(QMailStore::instance()->queryMessages(_key, _sortKey, _limit));
-
-    foreach (const QMailMessageId &id, newIds) {
-        if (!_currentIds.contains(id)) {
-            ids.append(id);
+            foreach (const QMailMessageId &id, newIdsList) {
+                if (!_currentIds.contains(id)) {
+                    idsToAppend.append(id);
+                }
+            }
+            appendMessages(idsToAppend, newIdsList);
         }
     }
-    appendMessages(ids, newIds);
 }
 
 int QMailMessageThreadedModelPrivate::totalCount() const
@@ -364,18 +377,18 @@ bool QMailMessageThreadedModelPrivate::addMessages(const QMailMessageIdList &ids
     // when this event was recorded and when we're processing the signal.
 
     QMailMessageKey idKey(QMailMessageKey::id(_currentIds + ids));
-    const QMailMessageIdList newIds(QMailStore::instance()->queryMessages(_key & idKey, _sortKey, _limit));
+    const QMailMessageIdList newIdsList(QMailStore::instance()->queryMessages(_key & idKey, _sortKey, _limit));
 
-    return appendMessages(ids, newIds);
+    return appendMessages(ids, newIdsList);
 }
 
-bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &ids, const QMailMessageIdList &newIds)
+bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &idsToAppend, const QMailMessageIdList &newIdsList)
 {
     // Find which of the messages we must add (in ascending insertion order)
     QList<int> validIndices;
     QHash<QMailMessageId, int> idIndexMap;
-    foreach (const QMailMessageId &id, ids) {
-        int index = newIds.indexOf(id);
+    foreach (const QMailMessageId &id, idsToAppend) {
+        int index = newIdsList.indexOf(id);
         if (index != -1) {
             validIndices.append(index);
             idIndexMap[id] = index;
@@ -389,7 +402,7 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
 
     QMailMessageIdList additionIds;
     foreach (int index, validIndices) {
-        additionIds.append(newIds.at(index));
+        additionIds.append(newIdsList.at(index));
     }
 
     // Find all messages involved in conversations with the new messages, along with their predecessor ID
@@ -410,7 +423,7 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
         }
 
         // Stop processing messages if we reached the limit
-        if(_limit && _root._children.count() >= _limit) {
+        if(_limit && _root._children.count() >= (int)_limit) {
             break;
         }
 
@@ -419,17 +432,17 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
 
         // Find the first message ancestor that is in our display set
         QMailMessageId predecessorId(predecessor[messageId]);
-        while (predecessorId.isValid() && !newIds.contains(predecessorId)) {
+        while (predecessorId.isValid() && !newIdsList.contains(predecessorId)) {
             predecessorId = predecessor[predecessorId];
         }
 
         do {
             // Stop processing messages if we reached the limit
-            if(_limit && _root._children.count() >= _limit) {
+            if(_limit && _root._children.count() >= (int)_limit) {
                 break;
             }
 
-            int messagePos = newIds.indexOf(messageId);
+            int messagePos = newIdsList.indexOf(messageId);
 
             QMailMessageThreadedModelItem *insertParent = 0;
 
@@ -458,7 +471,7 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
                     if (idIndexMap.contains(id)) {
                         childPos = idIndexMap[id];
                     } else {
-                        childPos = newIds.indexOf(id);
+                        childPos = newIdsList.indexOf(id);
                         idIndexMap[id] = childPos;
                     }
                     if ((childPos != -1) && (childPos < messagePos)) {
@@ -486,7 +499,7 @@ bool QMailMessageThreadedModelPrivate::appendMessages(const QMailMessageIdList &
 
                 messageId = predecessorId;
                 predecessorId = predecessor[messageId];
-                while (predecessorId.isValid() && !newIds.contains(predecessorId)) {
+                while (predecessorId.isValid() && !newIdsList.contains(predecessorId)) {
                     predecessorId = predecessor[predecessorId];
                 }
             }
