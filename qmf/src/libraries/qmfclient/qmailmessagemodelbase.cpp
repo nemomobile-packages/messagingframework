@@ -414,7 +414,6 @@ uint QMailMessageModelBase::limit() const
 void QMailMessageModelBase::setLimit(uint limit)
 {
     impl()->setLimit(limit);
-    fullRefresh(true);
 }
 
 /*!
