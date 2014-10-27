@@ -31,6 +31,12 @@ QT = core
     equals(QT_MAJOR_VERSION, 5): QT += widgets
 }
 
+packagesExist(qt5-boostable) {
+    PKGCONFIG += qt5-boostable
+} else {
+    warning("qt5-boostable not available; startup times will be slower")
+}
+
 CONFIG -= app_bundle
 target.path += $$QMF_INSTALL_ROOT/bin
 

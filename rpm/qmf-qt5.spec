@@ -18,6 +18,7 @@ BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(accounts-qt5)
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(keepalive)
+BuildRequires:  pkgconfig(qt5-boostable)
 #Needed for qhelpgenerator
 BuildRequires:  qt5-qttools-qthelp-devel
 BuildRequires:  qt5-plugin-platform-minimal
