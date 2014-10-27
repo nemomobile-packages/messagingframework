@@ -1,7 +1,7 @@
 [Unit]
 Description=messageserver5
 Requires=messageserver5-accounts-check.service
-Requires=booster-generic.service
+Requires=booster-qt5.service
 After=booster-qt5.service
 After=messageserver5-accounts-check.service
 
