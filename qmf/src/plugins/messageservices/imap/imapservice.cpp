@@ -1508,11 +1508,8 @@ ImapService::ImapService(const QMailAccountId &accountId)
       _initiatePushEmailTimer(new QTimer(this))
 {
 #ifdef USE_KEEPALIVE
-    _lastSyncCounter = 0;
-    _idling = false;
     _backgroundActivity = new BackgroundActivity(this);
     _backgroundActivity->setWakeupFrequency(BackgroundActivity::ThirtySeconds);
-    connect(_backgroundActivity, SIGNAL(running()), this, SLOT(onUpdateLastSyncTime()));
 #endif
 
     QMailAccount account(accountId);
@@ -1581,6 +1578,16 @@ void ImapService::disable()
 {
     QMailAccountConfiguration accountCfg(_accountId);
     ImapConfiguration imapCfg(accountCfg);
+    QMailAccount account(_accountId);
+    const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
+    if (hasPersistentConnection) {
+        account.setStatus(QMailAccount::HasPersistentConnection, false);
+        if (!QMailStore::instance()->updateAccount(&account)) {
+            qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << false;
+        } else {
+            qMailLog(Messaging) <<  "HasPersistentConnection for " << account.id() << "changed to" << false;
+        }
+    }
     _accountWasEnabled = false;
     _accountWasPushEnabled = imapCfg.pushEnabled();
     _previousPushFolders = imapCfg.pushFolders();
@@ -1588,7 +1595,6 @@ void ImapService::disable()
     _restartPushEmailTimer->stop();
     _initiatePushEmailTimer->stop();
 #ifdef USE_KEEPALIVE
-    _idling = false;
     _backgroundActivity->stop();
 #endif
     _source->setIntervalTimer(0);
@@ -1704,7 +1710,6 @@ void ImapService::initiatePushEmail()
     _restartPushEmailTimer->stop();
     _initiatePushEmailTimer->stop();
 #ifdef USE_KEEPALIVE
-    _idling = false;
     if (_backgroundActivity->isRunning()) {
         _backgroundActivity->stop();
         qMailLog(Messaging) << Q_FUNC_INFO <<  "Stopping keepalive";
@@ -1714,11 +1719,20 @@ void ImapService::initiatePushEmail()
     if (ids.count()) {
         _establishingPushEmail = true;
 #ifdef USE_KEEPALIVE
-    qMailLog(Messaging) << Q_FUNC_INFO <<  "Starting keepalive";
-    _lastSyncCounter = 0;
-    _idling = true;
-    _backgroundActivity->wait();
+        qMailLog(Messaging) << Q_FUNC_INFO <<  "Starting keepalive";
+        _backgroundActivity->run();
 #endif
+        QMailAccount account(_accountId);
+        const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
+        if (!hasPersistentConnection) {
+            account.setStatus(QMailAccount::HasPersistentConnection, true);
+            if (!QMailStore::instance()->updateAccount(&account)) {
+                qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << true;
+            } else {
+                qMailLog(Messaging) <<  "HasPersistentConnection for " << account.id() << "changed to" << true;
+            }
+        }
+
         foreach(QMailFolderId id, ids) {
             // Check for flag changes and new mail
             _source->queueFlagsChangedCheck(id);
@@ -1767,35 +1781,21 @@ void ImapService::updateStatus(const QString &text)
 }
 
 #ifdef USE_KEEPALIVE
-void ImapService::onUpdateLastSyncTime()
-{
-    if (_idling && _client->idlesEstablished()) {
-        _lastSyncCounter++;
-        if (_lastSyncCounter == 2) {
-            QMailAccount account(_accountId);
-            account.setLastSynchronized(QMailTimeStamp::currentDateTime());
-            if (!QMailStore::instance()->updateAccount(&account)) {
-                qWarning() << "Unable to update account" << account.id() << "to set lastSynchronized";
-            }
-            _lastSyncCounter = 0;
-        }
-    }
-
-    // start timer again if still in idle mode
-    if (_idling) {
-         _backgroundActivity->wait();
-    } else if (_backgroundActivity->isRunning()){
-        qMailLog(Messaging) << Q_FUNC_INFO << "Stopping keepalive";
-        _backgroundActivity->stop();
-        _lastSyncCounter = 0;
-    }
-}
-
 void ImapService::stopPushEmail()
 {
     qMailLog(Messaging) << "Stopping push email for account" << _accountId
                         << QMailAccount(_accountId).name();
-    _idling = false;
+
+    QMailAccount account(_accountId);
+    const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
+    if (hasPersistentConnection) {
+        account.setStatus(QMailAccount::HasPersistentConnection, false);
+        if (!QMailStore::instance()->updateAccount(&account)) {
+            qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << false;
+        } else {
+            qMailLog(Messaging) <<  "HasPersistentConnection for " << account.id() << "changed to" << false;
+        }
+    }
     _backgroundActivity->stop();
     _restartPushEmailTimer->stop();
     _initiatePushEmailTimer->stop();
