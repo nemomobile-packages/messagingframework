@@ -79,7 +79,6 @@ protected slots:
     void updateStatus(const QString& text);
 
 #ifdef USE_KEEPALIVE
-    void onUpdateLastSyncTime();
     void stopPushEmail();
 #endif
 
@@ -102,8 +101,6 @@ private:
     QTimer *_initiatePushEmailTimer;
 #ifdef USE_KEEPALIVE
     BackgroundActivity* _backgroundActivity;
-    int _lastSyncCounter;
-    bool _idling;
 #endif
 };
 

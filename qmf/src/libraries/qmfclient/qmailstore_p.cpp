@@ -2672,6 +2672,10 @@ bool SSOAccountSatisfyTheProperty(Accounts::Account* ssoAccount, const QMailAcco
             status &= (~QMailAccount::AppendSignature);
             status |= appendSignature?(QMailAccount::AppendSignature):0;
 
+            bool hasPersistentConnection = ssoAccount->valueAsBool("hasPersistentConnection", false);
+            status &= (~QMailAccount::HasPersistentConnection);
+            status |= hasPersistentConnection?(QMailAccount::HasPersistentConnection):0;
+
             return SSOAccountCompareProperty<quint64>(ssoAccount,
                                                       status,
                                                       argument.op, argument.valueList);
@@ -3107,6 +3111,7 @@ bool QMailStorePrivate::initStore()
                 || attemptRegisterStatusBit("CanCreateFolders", "accountstatus", 63, true, const_cast<quint64 *>(&QMailAccount::CanCreateFolders), t, false)
                 || attemptRegisterStatusBit("UseSmartReply", "accountstatus", 63, true, const_cast<quint64 *>(&QMailAccount::UseSmartReply), t, false)
                 || attemptRegisterStatusBit("CanSearchOnServer", "accountstatus", 63, true, const_cast<quint64 *>(&QMailAccount::CanSearchOnServer), t, false)
+                || attemptRegisterStatusBit("HasPersistentConnection", "accountstatus", 63, true, const_cast<quint64 *>(&QMailAccount::HasPersistentConnection), t, false)
                 || attemptRegisterStatusBit("SynchronizationEnabled", "folderstatus", 63, true, const_cast<quint64 *>(&QMailFolder::SynchronizationEnabled), t, false)
                 || attemptRegisterStatusBit("Synchronized", "folderstatus", 63, true, const_cast<quint64 *>(&QMailFolder::Synchronized), t, false)
                 || attemptRegisterStatusBit("PartialContent", "folderstatus", 63, true, const_cast<quint64 *>(&QMailFolder::PartialContent), t, false)
@@ -3642,11 +3647,13 @@ QMailAccount QMailStorePrivate::extractAccount(const QSharedPointer<Accounts::Ac
     const bool& isDefault = ssoAccount->valueAsBool("email/default");
     const bool& canTransmit = ssoAccount->valueAsBool("canTransmit", true);
     const bool& appendSignature = ssoAccount->valueAsBool("signatureEnabled", true);
+    const bool& hasPersistentConnection = ssoAccount->valueAsBool("hasPersistentConnection", false);
 
     result.setStatus(QMailAccount::Enabled, enabled);
     result.setStatus(QMailAccount::PreferredSender, isDefault);
     result.setStatus(QMailAccount::CanTransmit, canTransmit);
     result.setStatus(QMailAccount::AppendSignature, appendSignature);
+    result.setStatus(QMailAccount::HasPersistentConnection, hasPersistentConnection);
 
     result.setSignature(ssoAccount->valueAsString("signature"));
     result.setFromAddress(ssoAccount->contains("fullName")?
@@ -6148,6 +6155,8 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptAddAccount(QMailAccou
     ssoAccount->setValue("status", account->status());
     const bool appendSignature = (account->status() & QMailAccount::AppendSignature);
     ssoAccount->setValue("signatureEnabled", appendSignature);
+    const bool hasPersistentConnection = (account->status() & QMailAccount::HasPersistentConnection);
+    ssoAccount->setValue("hasPersistentConnection", hasPersistentConnection);
     ssoAccount->setValue("signature", account->signature());
     ssoAccount->setValue("emailaddress", account->fromAddress().address());
     ssoAccount->setValue("fullName", account->fromAddress().name());
@@ -6950,6 +6959,8 @@ QMailStorePrivate::AttemptResult QMailStorePrivate::attemptUpdateAccount(QMailAc
         ssoAccount->setValue("status", account->status());
         bool signatureEnabled = account->status() & QMailAccount::AppendSignature;
         ssoAccount->setValue("signatureEnabled", signatureEnabled);
+        bool hasPersistentConnection = account->status() & QMailAccount::HasPersistentConnection;
+        ssoAccount->setValue("hasPersistentConnection", hasPersistentConnection);
         ssoAccount->setValue("signature", account->signature());
         ssoAccount->setValue("emailaddress", account->fromAddress().address());
         ssoAccount->setValue("fullName", account->fromAddress().name());

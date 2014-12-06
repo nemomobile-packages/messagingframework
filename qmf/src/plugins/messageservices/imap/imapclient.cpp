@@ -1668,7 +1668,18 @@ void ImapClient::setAccount(const QMailAccountId &id)
     }
 
     _config = QMailAccountConfiguration(id);
-
+    // At this point account can't have a persistent connection to the server, if for some reason the status is wrong(crash/abort) we will
+    // reset correct status here.
+    QMailAccount account(id);
+    const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
+    if (hasPersistentConnection) {
+        account.setStatus(QMailAccount::HasPersistentConnection, false);
+        if (!QMailStore::instance()->updateAccount(&account)) {
+            qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << false;
+        } else {
+            qMailLog(Messaging) <<  "HasPersistentConnection for " << account.id() << "changed to" << false;
+        }
+    }
 #ifdef USE_ACCOUNTS_QT
     if (!_ssoSessionManager) {
         ImapConfiguration imapCfg(_config);
