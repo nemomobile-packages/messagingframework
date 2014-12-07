@@ -1582,6 +1582,7 @@ void ImapService::disable()
     const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
     if (hasPersistentConnection) {
         account.setStatus(QMailAccount::HasPersistentConnection, false);
+        account.setLastSynchronized(QMailTimeStamp::currentDateTime());
         if (!QMailStore::instance()->updateAccount(&account)) {
             qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << false;
         } else {
@@ -1790,6 +1791,7 @@ void ImapService::stopPushEmail()
     const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
     if (hasPersistentConnection) {
         account.setStatus(QMailAccount::HasPersistentConnection, false);
+        account.setLastSynchronized(QMailTimeStamp::currentDateTime());
         if (!QMailStore::instance()->updateAccount(&account)) {
             qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << false;
         } else {
