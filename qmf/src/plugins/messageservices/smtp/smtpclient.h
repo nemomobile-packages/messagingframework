@@ -113,9 +113,9 @@ private slots:
 #endif
 
 private:
-    void sendCommand(const char *data, int len = -1);
+    void sendCommand(const char *data, int len = -1, bool maskDebug = false);
     void sendCommand(const QString &cmd);
-    void sendCommand(const QByteArray &cmd);
+    void sendCommand(const QByteArray &cmd, bool maskDebug = false);
     void sendCommands(const QStringList &cmds);
     void incomingData();
     void nextAction(const QString &response);
