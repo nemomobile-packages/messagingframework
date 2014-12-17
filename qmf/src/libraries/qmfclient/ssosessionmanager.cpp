@@ -113,7 +113,7 @@ void SSOSessionManager::cancel()
 
 /*!
     Creates a new SSO identity for the account identified by \a id for
-    the service to \a serviceType with the authentication type \a serviceAuthentication.
+    the service to \a serviceType.
 
     Returns true if the account has one email service enabled and a valid identity stored
     in ths accounts-sso database, otherwise returns false.

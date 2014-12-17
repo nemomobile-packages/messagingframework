@@ -139,7 +139,7 @@ QByteArray QMailAuthenticator::getAuthentication(const QMailAccountConfiguration
 */
 #ifdef USE_ACCOUNTS_QT
 QByteArray QMailAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge,
-                                           const QMail::SaslMechanism authType, const QString password)
+                                           const QMail::SaslMechanism authType, const QString &password)
 {
     QMailServiceConfiguration configuration(svcCfg);
     if (!configuration.value("smtpusername").isEmpty() && authType == QMail::CramMd5Mechanism) {

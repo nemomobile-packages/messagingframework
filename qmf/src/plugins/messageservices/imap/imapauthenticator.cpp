@@ -117,6 +117,25 @@ static QMail::SaslMechanism authFromCapabilities(const QStringList &capabilities
     }
 }
 
+static QByteArray authenticationResponses(QList<QByteArray> &authList, const QMail::SaslMechanism &authType, const QMailAccountId &id)
+{
+    QByteArray result;
+    if(!authList.empty()) {
+        result = authList.takeFirst();
+        if (!authList.empty()) {
+            if (authType == QMail::CramMd5Mechanism) {
+                authPassword = QString::fromLatin1(authList.takeFirst());
+                responseAuthType = QMail::CramMd5Mechanism;
+            } else {
+                gResponses[id] = authList;
+            }
+        }
+    } else {
+        qMailLog(IMAP) << "Failed to get authentication for method" << authType << "in account id:" << id;
+    }
+    return result;
+}
+
 
 QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QMap<QString, QList<QByteArray> > &ssoLogin)
 {
@@ -128,8 +147,7 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
     // if we don't have auth yet, try to get it from the capabilities
     if (ssoLogin.size() > 1 && authType == QMail::NoMechanism) {
         qMailLog(IMAP) << "Discovering authentication from capabilities for account id:" << id;
-        QMail::SaslMechanism discoveredAuth = authFromCapabilities(capabilities, ssoLogin);
-        authType = discoveredAuth;
+        authType = authFromCapabilities(capabilities, ssoLogin);
         if (authType != QMail::NoMechanism) {
             QMailAccount account(id);
             QMailAccountConfiguration accountConfig(id);
@@ -148,39 +166,19 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
             if (ssoLogin.size() == 1) {
                 QList<QString> keys = ssoLogin.keys();
                 auth = ssoLogin.value(keys.at(0));
-                result = auth.takeFirst();
-                if (auth.size()) {
-                    // None of the current supported auths uses this
-                    gResponses[id] = auth;
-                }
+                result = authenticationResponses(auth, authType, id);
                 qMailLog(IMAP) << "Using authentication method " << keys.at(0)
                                << " for account id:" << id;
             } else {
                 if (authType == QMail::CramMd5Mechanism) {
                     auth = ssoLogin.value("CRAM-MD5");
-                    if (!auth.empty()) {
-                        result = auth.takeFirst();
-                        authPassword = QString::fromLatin1(auth.takeFirst());
-                        responseAuthType = QMail::CramMd5Mechanism;
-                    } else {
-                        qMailLog(IMAP) << "Failed to get authentication for method CRAM-MD5 in account id:" << id;
-                    }
+                    result = authenticationResponses(auth, authType, id);
                 } else if (authType == QMail::PlainMechanism) {
                     auth = ssoLogin.value("PLAIN");
-                    if (!auth.empty()) {
-                        result = auth.takeFirst();
-                        gResponses[id] = auth;
-                    } else {
-                        qMailLog(IMAP) << "Failed to get authentication for method PLAIN in account id:" << id;
-                    }
+                    result = authenticationResponses(auth, authType, id);
                 } else if (authType == QMail::LoginMechanism) {
                     auth = ssoLogin.value("LOGIN");
-                    if (!auth.empty()) {
-                        result = auth.takeFirst();
-                        gResponses[id] = auth;
-                    } else {
-                        qMailLog(IMAP) << "Failed to get authentication for method LOGIN in account id:" << id;
-                    }
+                    result = authenticationResponses(auth, authType, id);
                 }
             }
         } else {

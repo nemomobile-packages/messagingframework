@@ -110,6 +110,7 @@ SmtpClient::SmtpClient(QObject* parent)
     , temporaryFile(0)
     , waitingForBytes(0)
     , notUsingAuth(false)
+    , authReset(false)
     , authTimeout(0)
     , ssoSessionManager(0)
     , loginFailed(false)
@@ -128,6 +129,7 @@ SmtpClient::SmtpClient(QObject* parent)
     , temporaryFile(0)
     , waitingForBytes(0)
     , notUsingAuth(false)
+    , authReset(false)
     , authTimeout(0)
 {
     connect(QMailStore::instance(), SIGNAL(accountsUpdated(const QMailAccountIdList&)), 
@@ -232,6 +234,7 @@ void SmtpClient::newConnection()
     sending = true;
     domainName = QByteArray();
     outstandingResponses = 0;
+    authReset = false;
 
     if (!transport) {
         // Set up the transport
@@ -684,10 +687,30 @@ void SmtpClient::nextAction(const QString &response)
             // We are now authenticated
             status = Authenticated;
             nextAction(QString());
-        } else if (responseCode == 530) {
-            operationFailed(QMailServiceAction::Status::ErrConfiguration, response);
         } else if (responseCode == 504) {
-            // FIX ME: reset method used and try again to authenticated from caps
+            QMailAccountConfiguration::ServiceConfiguration serviceCfg = config.serviceConfiguration("smtp");
+            SmtpConfiguration smtpCfg(serviceCfg);
+            // reset method used and try again to authenticated from caps
+            if (smtpCfg.smtpAuthFromCapabilities() && !authReset) {
+                qMailLog(SMTP) << "Resetting AUTH TYPE";
+                authReset = true;
+                QMailAccountId id(smtpCfg.id());
+                QMailAccount account(id);
+                QMailAccountConfiguration accountConfig(id);
+                QMailAccountConfiguration::ServiceConfiguration serviceConf(accountConfig.serviceConfiguration("smtp"));
+                serviceConf.setValue("authentication", QString::number(QMail::NoMechanism));
+                if (!QMailStore::instance()->updateAccount(&account, &accountConfig)) {
+                    qWarning() << "Unable to update account" << account.id() << "auth type!!!!";
+                    operationFailed(QMailServiceAction::Status::ErrConfiguration, response);
+                }
+                // Restart the authentication process
+                QByteArray ehlo("EHLO " + localName());
+                sendCommand(ehlo);
+                status = Helo;
+            } else {
+                operationFailed(QMailServiceAction::Status::ErrConfiguration, response);
+            }
+        } else if (responseCode == 530) {
             operationFailed(QMailServiceAction::Status::ErrConfiguration, response);
         } else {
 #ifdef USE_ACCOUNTS_QT

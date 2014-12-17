@@ -85,6 +85,25 @@ static SmtpConfiguration::AuthType authFromCapabilities(const QStringList &capab
     }
 }
 
+static QByteArray authenticationResponses(QList<QByteArray> &authList, const SmtpConfiguration::AuthType &authType, const QMailAccountId &id)
+{
+    QByteArray result;
+    if(!authList.empty()) {
+        result = authList.takeFirst();
+        if (!authList.empty()) {
+            if (authType == SmtpConfiguration::Auth_CRAMMD5) {
+                authPassword = QString::fromLatin1(authList.takeFirst());
+                responseAuthType = QMail::CramMd5Mechanism;
+            } else {
+                gResponses[id] = authList;
+            }
+        }
+    } else {
+        qMailLog(SMTP) << "Failed to get authentication for method" << authType << "in account id:" << id;
+    }
+    return result;
+}
+
 QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QMap<QString, QList<QByteArray> > &ssoLogin)
 {
     QByteArray result;
@@ -96,8 +115,7 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
     if (ssoLogin.size() > 1 && authType == SmtpConfiguration::Auth_NONE
             && smtpCfg.smtpAuthFromCapabilities()) {
         qMailLog(SMTP) << "Discovering authentication from capabilities for account id:" << id;
-        SmtpConfiguration::AuthType discoveredAuth = authFromCapabilities(capabilities, ssoLogin);
-        authType = discoveredAuth;
+        authType = authFromCapabilities(capabilities, ssoLogin);;
         if (authType != SmtpConfiguration::Auth_NONE) {
             QMailAccount account(id);
             QMailAccountConfiguration accountConfig(id);
@@ -117,38 +135,19 @@ QByteArray SmtpAuthenticator::getAuthentication(const QMailAccountConfiguration:
             if (ssoLogin.size() == 1) {
                 QList<QString> keys = ssoLogin.keys();
                 auth = ssoLogin.value(keys.at(0));
-                result = auth.takeFirst();
-                if (auth.size()) {
-                   gResponses[id] = auth;
-                }
+                result = authenticationResponses(auth, authType, id);
                 qMailLog(SMTP) << "Using authentication method " << keys.at(0)
                                << " for account id:" << id;
             } else {
                 if (authType == SmtpConfiguration::Auth_CRAMMD5) {
                     auth = ssoLogin.value("CRAM-MD5");
-                    if (!auth.empty()) {
-                        result = auth.takeFirst();
-                        authPassword = QString::fromLatin1(auth.takeFirst());
-                        responseAuthType = QMail::CramMd5Mechanism;
-                    } else {
-                        qMailLog(SMTP) << "Failed to get authentication for method CRAM-MD5 in account id:" << id;
-                    }
+                    result = authenticationResponses(auth, authType, id);
                 } else if (authType == SmtpConfiguration::Auth_PLAIN) {
                     auth = ssoLogin.value("PLAIN");
-                    if (!auth.empty()) {
-                        result = auth.takeFirst();
-                        gResponses[id] = auth;
-                    } else {
-                        qMailLog(SMTP) << "Failed to get authentication for method PLAIN in account id:" << id;
-                    }
+                    result = authenticationResponses(auth, authType, id);
                 } else if (authType == SmtpConfiguration::Auth_LOGIN) {
                     auth = ssoLogin.value("LOGIN");
-                    if (!auth.empty()) {
-                        result = auth.takeFirst();
-                        gResponses[id] = auth;
-                    } else {
-                        qMailLog(SMTP) << "Failed to get authentication for method LOGIN in account id:" << id;
-                    }
+                    result = authenticationResponses(auth, authType, id);
                 }
             }
         } else {
