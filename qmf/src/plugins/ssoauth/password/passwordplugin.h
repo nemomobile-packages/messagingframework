@@ -59,16 +59,16 @@ public:
     ~SSOPasswordPlugin();
 
     virtual QString key() const;
-    virtual QList<QByteArray> authentication(const SignOn::SessionData &sessionData,
-                                         const QString &serviceType, const QString &userName, int serviceAuthentication) const;
+    virtual QMap<QString, QList<QByteArray> > authentication(const SignOn::SessionData &sessionData,
+                                         const QString &serviceType, const QString &userName) const;
     virtual void credentialsNeedUpdate(int accountId);
     virtual SignOn::SessionData sessionData(const QString &accountProvider, QVariantMap authParameters) const;
     virtual SSOAuthService* createService();
 
 private:
-    QList<QByteArray> getIMAPAuthentication(const QString &password, const QString &username, int serviceAuthentication) const;
-    QList<QByteArray> getPOPAuthentication(const QString &password, const QString &username, int serviceAuthentication) const;
-    QList<QByteArray> getSMTPAuthentication(const QString &password, const QString &username, int serviceAuthentication) const;
+    QMap<QString, QList<QByteArray> > getIMAPAuthentication(const QString &password, const QString &username) const;
+    QMap<QString, QList<QByteArray> > getPOPAuthentication(const QString &password, const QString &username) const;
+    QMap<QString, QList<QByteArray> > getSMTPAuthentication(const QString &password, const QString &username) const;
 };
 
 #endif // PASSWORDPLUGIN_H

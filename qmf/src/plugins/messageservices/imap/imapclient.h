@@ -103,6 +103,7 @@ public:
     QMailMessageKey trashKey(const QMailFolderId &folderId) const;
     QStringList deletedMessages(const QMailFolderId &folderId) const;
 
+    bool loggingIn() const;
     bool idlesEstablished();
     void idling(const QMailFolderId &id);
     QMailFolderIdList configurationIdleFolderIds();
@@ -166,7 +167,7 @@ protected slots:
 #ifdef USE_ACCOUNTS_QT
     void onAccountsUpdated(const QMailAccountIdList& list);
     void onSsoSessionError(const QString &error);
-    void onSsoSessionResponse(const QList<QByteArray> &ssoLogin);
+    void onSsoSessionResponse(const QMap<QString, QList<QByteArray> > &ssoLogin);
 #endif
 
 private:
@@ -215,7 +216,7 @@ private:
     bool _loginFailed;
     bool _sendLogin;
     bool _recreateIdentity;
-    QByteArray _ssoLogin;
+    QMap<QString, QList<QByteArray> > _ssoLogin;
 #endif
 };
 

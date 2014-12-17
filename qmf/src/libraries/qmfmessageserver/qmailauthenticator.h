@@ -43,6 +43,7 @@
 #define QMAILAUTHENTICATOR_H
 
 #include <qmailaccountconfiguration.h>
+#include "qmailnamespace.h"
 
 #include <QByteArray>
 #include <QStringList>
@@ -53,7 +54,7 @@ public:
     static bool useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
     static QByteArray getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities);
 #ifdef USE_ACCOUNTS_QT
-    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, QString password);
+    static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, const QMail::SaslMechanism authType, const QString password);
 #else
     static QByteArray getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge);
 #endif

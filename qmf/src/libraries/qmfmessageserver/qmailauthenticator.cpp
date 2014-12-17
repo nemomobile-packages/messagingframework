@@ -40,7 +40,6 @@
 ****************************************************************************/
 
 #include "qmailauthenticator.h"
-#include "qmailnamespace.h"
 #include <qmailserviceconfiguration.h>
 #include <qcryptographichash.h>
 #include <qbytearray.h>
@@ -139,14 +138,14 @@ QByteArray QMailAuthenticator::getAuthentication(const QMailAccountConfiguration
     transmission.
 */
 #ifdef USE_ACCOUNTS_QT
-QByteArray QMailAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, QString password)
+QByteArray QMailAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge,
+                                           const QMail::SaslMechanism authType, const QString password)
 {
     QMailServiceConfiguration configuration(svcCfg);
-    if (!configuration.value("smtpusername").isEmpty()
-        && (configuration.value("authentication") == QString::number(QMail::CramMd5Mechanism))) {
+    if (!configuration.value("smtpusername").isEmpty() && authType == QMail::CramMd5Mechanism) {
         // SMTP server CRAM-MD5 authentication
         return cramMd5Response(challenge, configuration.value("smtpusername").toUtf8(), password.toUtf8());
-    } else if (configuration.value("authentication") == QString::number(QMail::CramMd5Mechanism)) {
+    } else if (authType == QMail::CramMd5Mechanism) {
         // IMAP/POP server CRAM-MD5 authentication
         return cramMd5Response(challenge, configuration.value("username").toUtf8(), password.toUtf8());
     }

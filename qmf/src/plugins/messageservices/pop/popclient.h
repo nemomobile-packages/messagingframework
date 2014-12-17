@@ -119,7 +119,7 @@ protected slots:
 #ifdef USE_ACCOUNTS_QT
     void onAccountsUpdated(const QMailAccountIdList& list);
     void onSsoSessionError(const QString &error);
-    void onSsoSessionResponse(const QList<QByteArray> &ssoCredentials);
+    void onSsoSessionResponse(const QMap<QString, QList<QByteArray> > &ssoCredentials);
 #endif
 
     void connectionInactive();
@@ -213,7 +213,7 @@ private:
     SSOSessionManager* ssoSessionManager;
     bool loginFailed;
     bool sendLogin;
-    QList<QByteArray> ssoLogin;
+    QMap<QString, QList<QByteArray> > ssoLogin;
 #endif
 };
 

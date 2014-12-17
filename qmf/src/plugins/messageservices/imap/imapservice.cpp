@@ -1620,6 +1620,10 @@ void ImapService::accountsUpdated(const QMailAccountIdList &ids)
     bool isPushEnabled(imapCfg.pushEnabled());
     QStringList pushFolders(imapCfg.pushFolders());
     QString newConnectionSettings(connectionSettings(imapCfg));
+    bool loggingIn = false;
+    if (_client) {
+        loggingIn = _client->loggingIn();
+    }
     if (!isEnabled) {
         if (_accountWasEnabled) {
             // Account changed from enabled to disabled
@@ -1630,18 +1634,27 @@ void ImapService::accountsUpdated(const QMailAccountIdList &ids)
         return;
     }
 
-    if ((_accountWasPushEnabled != isPushEnabled)
-        || (_previousPushFolders != pushFolders) 
-        || (_previousConnectionSettings != newConnectionSettings)) {
-        // push email or connection settings have changed, restart client
-        _initiatePushDelay.remove(_accountId);
-        if (_accountWasEnabled) {
-            disable();
+    // if we are in logging state let it fail first before removing the connections
+    // update settings anyway
+    if (!loggingIn) {
+        if ((_accountWasPushEnabled != isPushEnabled)
+            || (_previousPushFolders != pushFolders)
+            || (_previousConnectionSettings != newConnectionSettings)) {
+            // push email or connection settings have changed, restart client
+            _initiatePushDelay.remove(_accountId);
+            if (_accountWasEnabled) {
+                disable();
+            }
+            enable();
+        } else if (!_accountWasEnabled) {
+            // account changed from disabled to enabled
+            enable();
         }
-        enable();
-    } else if (!_accountWasEnabled) {
-        // account changed from disabled to enabled
-        enable();
+    } else {
+        // Update the settings
+        _accountWasPushEnabled = imapCfg.pushEnabled();
+        _previousPushFolders = imapCfg.pushFolders();
+        _previousConnectionSettings = connectionSettings(imapCfg);
     }
     
     // account was enabled and still is, update checkinterval 

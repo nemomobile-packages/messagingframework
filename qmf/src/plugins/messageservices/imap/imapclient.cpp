@@ -302,7 +302,7 @@ class IdleProtocol : public ImapProtocol {
 
 public:
 #ifdef USE_ACCOUNTS_QT
-    IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QByteArray &ssoLogin);
+    IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QMap<QString, QList<QByteArray> > &ssoLogin);
 #else
     IdleProtocol(ImapClient *client, const QMailFolder &folder);
 #endif
@@ -341,12 +341,12 @@ private:
     int _idleRetryDelay; // Try to restablish IDLE state
     enum IdleRetryDelay { InitialIdleRetryDelay = 30 }; //seconds
     bool _ssoAccount;
-    QByteArray &_ssoLogin;
+    QMap<QString, QList<QByteArray> > _ssoLogin;
 #endif
 };
 
 #ifdef USE_ACCOUNTS_QT
-IdleProtocol::IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QByteArray &ssoLogin)
+IdleProtocol::IdleProtocol(ImapClient *client, const QMailFolder &folder, const bool ssoAccount, QMap<QString, QList<QByteArray> > &ssoLogin)
     : _idleRetryDelay(InitialIdleRetryDelay),
       _ssoAccount(ssoAccount),
       _ssoLogin(ssoLogin)
@@ -471,7 +471,7 @@ void IdleProtocol::idleCommandTransition(const ImapCommand command, const Operat
             if (_ssoAccount)
                 sendLogin(config, _ssoLogin);
             else
-                sendLogin(config, "");
+                sendLogin(config, QMap<QString, QList<QByteArray> >());
 #else
             // We are now connected
             sendLogin(config);
@@ -484,7 +484,7 @@ void IdleProtocol::idleCommandTransition(const ImapCommand command, const Operat
         if (_ssoAccount)
             sendLogin(config, _ssoLogin);
         else
-            sendLogin(config, "");
+            sendLogin(config, QMap<QString, QList<QByteArray> >());
 #else
             sendLogin(config);
 #endif
@@ -912,7 +912,7 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
                     _sendLogin = true;
                     ssoProcessLogin();
                 } else
-                    _protocol.sendLogin(_config, "");
+                    _protocol.sendLogin(_config, QMap<QString, QList<QByteArray> >());
 #else
                 _protocol.sendLogin(_config);
 #endif
@@ -928,7 +928,7 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
                 _sendLogin = true;
                 ssoProcessLogin();
             } else
-                _protocol.sendLogin(_config, "");
+                _protocol.sendLogin(_config, QMap<QString, QList<QByteArray> >());
 #else
             _protocol.sendLogin(_config);
 #endif
@@ -1682,11 +1682,10 @@ void ImapClient::setAccount(const QMailAccountId &id)
     }
 #ifdef USE_ACCOUNTS_QT
     if (!_ssoSessionManager) {
-        ImapConfiguration imapCfg(_config);
         _ssoSessionManager = new SSOSessionManager(this);
-         if (_ssoSessionManager->createSsoIdentity(id, "imap4", imapCfg.mailAuthentication())) {
-             ENFORCE(connect(_ssoSessionManager, SIGNAL(ssoSessionResponse(QList<QByteArray>))
-                             ,this, SLOT(onSsoSessionResponse(QList<QByteArray>))));
+         if (_ssoSessionManager->createSsoIdentity(id, "imap4")) {
+             ENFORCE(connect(_ssoSessionManager, SIGNAL(ssoSessionResponse(QMap<QString,QList<QByteArray> >))
+                             ,this, SLOT(onSsoSessionResponse(QMap<QString,QList<QByteArray> >))));
              ENFORCE(connect(_ssoSessionManager, SIGNAL(ssoSessionError(QString))
                              ,this, SLOT(onSsoSessionError(QString))));
              qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
@@ -1864,6 +1863,15 @@ void ImapClient::updateFolderCountStatus(QMailFolder *folder)
     folder->setStatus(QMailFolder::PartialContent, (count < folder->serverCount()));
 }
 
+bool ImapClient::loggingIn() const
+{
+    if (_protocol.inUse()) {
+        return _protocol.loggingIn();
+    } else {
+       return false;
+    }
+}
+
 bool ImapClient::idlesEstablished()
 {
     ImapConfiguration imapCfg(_config);
@@ -2037,15 +2045,11 @@ void ImapClient::ssoCredentialsNeedUpdate()
     }
 }
 
-void ImapClient::onSsoSessionResponse(const QList<QByteArray> &ssoLogin)
+void ImapClient::onSsoSessionResponse(const QMap<QString,QList<QByteArray> > &ssoLogin)
 {
     qMailLog(IMAP)  << "Got SSO response";
     if (!ssoLogin.isEmpty()) {
-        if (_ssoLogin != ssoLogin[0]) {
-            _ssoLogin = ssoLogin[0];
-        } else {
-            _ssoLogin = ssoLogin[0];
-        }
+        _ssoLogin = ssoLogin;
     }
 
     if (_loginFailed) {
@@ -2070,8 +2074,7 @@ void ImapClient::onSsoSessionError(const QString &error)
 
 void ImapClient::onAccountsUpdated(const QMailAccountIdList &list)
 {
-    if (list.contains(_config.id())) {
-
+    if (list.contains(_config.id()) && !loggingIn()) {
         ImapConfiguration imapCfg1(_config);
         // copying here as the data is shared
         QMailAccountConfiguration config = QMailAccountConfiguration(_config.id());

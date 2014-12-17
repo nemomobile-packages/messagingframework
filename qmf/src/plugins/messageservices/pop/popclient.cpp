@@ -264,11 +264,10 @@ void PopClient::setAccount(const QMailAccountId &id)
     config = QMailAccountConfiguration(id);
 #ifdef USE_ACCOUNTS_QT
     if (!ssoSessionManager) {
-        PopConfiguration popCfg(config);
         ssoSessionManager = new SSOSessionManager(this);
-        if (ssoSessionManager->createSsoIdentity(id, "pop3", popCfg.mailEncryption())) {
-            ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionResponse(QList<QByteArray>))
-                            ,this, SLOT(onSsoSessionResponse(QList<QByteArray>))));
+        if (ssoSessionManager->createSsoIdentity(id, "pop3")) {
+            ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionResponse(QMap<QString,QList<QByteArray> >))
+                            ,this, SLOT(onSsoSessionResponse(QMap<QString,QList<QByteArray> >))));
             ENFORCE(connect(ssoSessionManager, SIGNAL(ssoSessionError(QString)),this, SLOT(onSsoSessionError(QString))));
             qMailLog(POP) << Q_FUNC_INFO << "SSO identity is found for account id: "<< id;
         } else {
@@ -578,11 +577,7 @@ void PopClient::processResponse(const QString &response)
             if ((response.length() > 2) && (response[1] == ' ')) {
                 // This is a continuation containing a challenge string (in Base64)
                 QByteArray challenge = QByteArray::fromBase64(response.mid(2).toLatin1());
-#ifdef USE_ACCOUNTS_QT
-                QByteArray response(PopAuthenticator::getResponse(config.serviceConfiguration("pop3"), challenge, ssoLogin));
-#else
                 QByteArray response(PopAuthenticator::getResponse(config.serviceConfiguration("pop3"), challenge));
-#endif
 
                 if (!response.isEmpty()) {
                     // Send the response as Base64 encoded
@@ -1407,7 +1402,7 @@ void PopClient::removeSsoIdentity(const QMailAccountId &accountId)
     }
 }
 
-void PopClient::onSsoSessionResponse(const QList<QByteArray> &ssoCredentials)
+void PopClient::onSsoSessionResponse(const QMap<QString, QList<QByteArray> > &ssoCredentials)
 {
     qMailLog(POP)  << "Got SSO response";
     if(!ssoCredentials.isEmpty()) {

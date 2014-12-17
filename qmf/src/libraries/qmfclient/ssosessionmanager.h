@@ -63,8 +63,7 @@ public:
     ~SSOSessionManager();
 
     void cancel();
-    bool createSsoIdentity(const QMailAccountId &id,
-                           const QString &serviceType, int serviceAuthentication);
+    bool createSsoIdentity(const QMailAccountId &id, const QString &serviceType);
     bool checkingCredentials() const;
     void credentialsNeedUpdate();
     void deleteSsoIdentity();
@@ -73,7 +72,7 @@ public:
     bool waitForSso();
 
 signals:
-    void ssoSessionResponse(const QList<QByteArray> &ssoLogin);
+    void ssoSessionResponse(const QMap<QString,QList<QByteArray> > &ssoLogin);
     void ssoSessionError(const QString &error);
 
 protected slots:
@@ -90,13 +89,11 @@ private:
     void forceTokenRefresh();
     void sessionResponse(const SignOn::SessionData &sessionData);
 
-    int _serviceAuthentication;
     int _accountId;
     bool _waitForSso;
     bool _recreatingSession;
     bool _reAuthenticate;
     bool _credentialsCheck;
-    QByteArray _ssoLogin;
     QString _authMethod;
     QString _authMechanism;
     QString _authUsername;
