@@ -48,11 +48,16 @@
 #include <qmailtransport.h>
 #include <qmailnamespace.h>
 #include <qmaillog.h>
+#include <qmailstore.h>
 
 namespace {
 
 QMap<QMailAccountId, QList<QByteArray> > gResponses;
 
+#ifdef USE_ACCOUNTS_QT
+QString authPassword;
+QMail::SaslMechanism responseAuthType;
+#endif
 }
 
 bool ImapAuthenticator::useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
@@ -79,42 +84,110 @@ bool ImapAuthenticator::useEncryption(const QMailAccountConfiguration::ServiceCo
 #endif
 }
 #ifdef USE_ACCOUNTS_QT
-QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QByteArray &ssoLogin)
+// Returns authentication type from more secure to less secure supported
+static QMail::SaslMechanism authFromCapabilities(const QStringList &capabilities, const QMap<QString, QList<QByteArray> > &ssoLogin)
 {
-    QString _password;
-    QByteArray result(QMailAuthenticator::getAuthentication(svcCfg, capabilities));
-    if (!result.isEmpty())
-        return QByteArray("AUTHENTICATE ") + result;
+    QStringList authCaps;
+    foreach (QString const& capability, capabilities) {
+        if (capability.startsWith("AUTH=", Qt::CaseInsensitive)) {
+            authCaps.append(capability.mid(5));
+        }
+    }
 
-    // If not handled by the authenticator, fall back to login
+    qMailLog(IMAP) << "Auths found: " << authCaps;
+
+    if (authCaps.contains("CRAM-MD5", Qt::CaseInsensitive) && ssoLogin.contains("CRAM-MD5")) {
+        qMailLog(IMAP) << "Returning auth CRAM-MD5";
+        return QMail::CramMd5Mechanism;
+    } else if (authCaps.contains("LOGIN", Qt::CaseInsensitive) && !authCaps.contains("PLAIN", Qt::CaseInsensitive)
+               && !capabilities.contains("LOGINDISABLED", Qt::CaseInsensitive) && ssoLogin.contains("LOGIN")) {
+        qMailLog(IMAP) <<  "Returning auth LOGIN";
+        // According to RFC3501, LOGIN should be used as last resort(for retro-compatibility)
+        // We should check that plain is not advertised(this can be omitted even if server supports it),
+        // and that LOGINDISABLED capability is not advertised.
+        return QMail::LoginMechanism;
+    } else if (ssoLogin.contains("PLAIN")) {
+        qMailLog(IMAP) << "Returning auth PLAIN";
+        // According to RFC3501, IMAP4 servers MUST implement plain auth
+        return QMail::PlainMechanism;
+    } else {
+        // return empty auth in order to send empty reply and make auth process fail
+        qMailLog(IMAP) << "Returning auth NONE";
+        return QMail::NoMechanism;
+    }
+}
+
+static QByteArray authenticationResponses(QList<QByteArray> &authList, const QMail::SaslMechanism &authType, const QMailAccountId &id)
+{
+    QByteArray result;
+    if(!authList.empty()) {
+        result = authList.takeFirst();
+        if (!authList.empty()) {
+            if (authType == QMail::CramMd5Mechanism) {
+                authPassword = QString::fromLatin1(authList.takeFirst());
+                responseAuthType = QMail::CramMd5Mechanism;
+            } else {
+                gResponses[id] = authList;
+            }
+        }
+    } else {
+        qMailLog(IMAP) << "Failed to get authentication for method" << authType << "in account id:" << id;
+    }
+    return result;
+}
+
+
+QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QMap<QString, QList<QByteArray> > &ssoLogin)
+{
+    QByteArray result;
     ImapConfiguration imapCfg(svcCfg);
-    if (ssoLogin.isEmpty()) {
-        _password = imapCfg.mailPassword();
-        qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< imapCfg.id()
-                       << ", using password from accounts configuration";
-    } else {
-        return ssoLogin;
+    QMailAccountId id(imapCfg.id());
+    QMail::SaslMechanism authType = static_cast<QMail::SaslMechanism>(imapCfg.mailAuthentication());
+
+    // if we don't have auth yet, try to get it from the capabilities
+    if (ssoLogin.size() > 1 && authType == QMail::NoMechanism) {
+        qMailLog(IMAP) << "Discovering authentication from capabilities for account id:" << id;
+        authType = authFromCapabilities(capabilities, ssoLogin);
+        if (authType != QMail::NoMechanism) {
+            QMailAccount account(id);
+            QMailAccountConfiguration accountConfig(id);
+            QMailAccountConfiguration::ServiceConfiguration serviceConf(accountConfig.serviceConfiguration("imap4"));
+            serviceConf.setValue("authentication",QString::number(authType));
+            if (!QMailStore::instance()->updateAccount(&account, &accountConfig)) {
+                qWarning() << "Unable to update account" << account.id() << "to auth type!!!!";
+            }
+        }
     }
 
-    if (imapCfg.mailAuthentication() == QMail::PlainMechanism) {
-        QByteArray username(imapCfg.mailUserName().toLatin1());
-        QByteArray pass(_password.toLatin1());
-        return QByteArray("AUTHENTICATE PLAIN ") + QByteArray(username + '\0' + username + '\0' + pass).toBase64();
-    }
+    if (authType != QMail::NoMechanism) {
+        if (!ssoLogin.isEmpty()) {
+            QList<QByteArray> auth;
 
-    return QByteArray("LOGIN") + ' ' + ImapProtocol::quoteString(imapCfg.mailUserName().toLatin1())
-                               + ' ' + ImapProtocol::quoteString(_password.toLatin1());
+            if (ssoLogin.size() == 1) {
+                QList<QString> keys = ssoLogin.keys();
+                auth = ssoLogin.value(keys.at(0));
+                result = authenticationResponses(auth, authType, id);
+                qMailLog(IMAP) << "Using authentication method " << keys.at(0)
+                               << " for account id:" << id;
+            } else {
+                if (authType == QMail::CramMd5Mechanism) {
+                    auth = ssoLogin.value("CRAM-MD5");
+                    result = authenticationResponses(auth, authType, id);
+                } else if (authType == QMail::PlainMechanism) {
+                    auth = ssoLogin.value("PLAIN");
+                    result = authenticationResponses(auth, authType, id);
+                } else if (authType == QMail::LoginMechanism) {
+                    auth = ssoLogin.value("LOGIN");
+                    result = authenticationResponses(auth, authType, id);
+                }
+            }
+        } else {
+            qMailLog(IMAP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< id
+                           << ", returning empty authentication";
+        }
+    }
+    return result;
 }
-
-QByteArray ImapAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, const QByteArray &ssoLogin)
-{
-    if (ssoLogin.size()) {
-        return QMailAuthenticator::getResponse(svcCfg, challenge, QString::fromLatin1(ssoLogin.constData()));
-    } else {
-        return QByteArray();
-    }
-}
-
 #else
 QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
@@ -133,11 +206,15 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
     return QByteArray("LOGIN") + ' ' + ImapProtocol::quoteString(imapCfg.mailUserName().toLatin1())
                                + ' ' + ImapProtocol::quoteString(imapCfg.mailPassword().toLatin1());
 }
+#endif
 QByteArray ImapAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
+#ifdef USE_ACCOUNTS_QT
+    return QMailAuthenticator::getResponse(svcCfg, challenge, responseAuthType, authPassword);
+#else
     return QMailAuthenticator::getResponse(svcCfg, challenge);
-}
 #endif
+}
 
 
 

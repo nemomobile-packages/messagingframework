@@ -150,6 +150,7 @@ public:
     bool connected() const;
     bool encrypted() const;
     bool inUse() const;
+    bool loggingIn() const;
     bool loggingOut() const;
 
     bool delimiterUnknown() const;
@@ -182,7 +183,7 @@ public:
     void sendCapability();
     void sendStartTLS();
 #ifdef USE_ACCOUNTS_QT
-    void sendLogin(const QMailAccountConfiguration &config, const QByteArray &ssoLogin);
+    void sendLogin(const QMailAccountConfiguration &config, const QMap<QString, QList<QByteArray> > &ssoLogin);
 #else
     void sendLogin(const QMailAccountConfiguration &config);
 #endif

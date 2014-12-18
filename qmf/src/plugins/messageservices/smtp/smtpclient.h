@@ -108,7 +108,7 @@ private slots:
     void sendMoreData(qint64);
     void authExpired();
 #ifdef USE_ACCOUNTS_QT
-    void onSsoSessionResponse(const QList<QByteArray> &ssoCredentials);
+    void onSsoSessionResponse(const QMap<QString, QList<QByteArray> > &ssoCredentials);
     void onSsoSessionError(const QString &error);
 #endif
 
@@ -170,6 +170,7 @@ private:
 
     QString bufferedResponse;
     bool notUsingAuth;
+    bool authReset;
 
     QTimer *authTimeout;
 
@@ -177,7 +178,7 @@ private:
     SSOSessionManager* ssoSessionManager;
     bool loginFailed;
     bool sendLogin;
-    QList<QByteArray> ssoLogin;
+    QMap<QString, QList<QByteArray> > ssoLogin;
 #endif
 };
 

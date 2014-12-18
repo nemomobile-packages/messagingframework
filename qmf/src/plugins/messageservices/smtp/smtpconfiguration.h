@@ -83,6 +83,7 @@ public:
 #endif
     int smtpAuthentication() const;
     int smtpEncryption() const;
+    bool smtpAuthFromCapabilities() const;
 };
 
 class PLUGIN_EXPORT SmtpConfigurationEditor : public SmtpConfiguration
@@ -100,6 +101,7 @@ public:
     void setSmtpPassword(const QString& password);
     void setSmtpAuthentication(int t);
     void setSmtpEncryption(int t);
+    void setSmtpAuthFromCapabilities(bool v);
 #endif
 };
 

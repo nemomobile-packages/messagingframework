@@ -45,6 +45,15 @@
 #include <qmailtransport.h>
 #include <qmaillog.h>
 
+#ifdef USE_ACCOUNTS_QT
+namespace {
+
+QString authPassword;
+QMail::SaslMechanism responseAuthType;
+
+}
+#endif
+
 bool PopAuthenticator::useEncryption(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
 {
 #ifdef QT_NO_OPENSSL
@@ -75,36 +84,20 @@ bool PopAuthenticator::useEncryption(const QMailAccountConfiguration::ServiceCon
 }
 
 #ifdef USE_ACCOUNTS_QT
-QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QList<QByteArray> &ssoLogin)
+QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities, const QMap<QString, QList<QByteArray> > &ssoLogin)
 {
+    Q_UNUSED(capabilities);
     QList<QByteArray> result;
 
-    QByteArray auth(QMailAuthenticator::getAuthentication(svcCfg, capabilities));
-    if (!auth.isEmpty()) {
-        result.append(QByteArray("AUTH ") + auth);
-    } else {
-        // If not handled by the authenticator, fall back to user/pass
+    // Currently pop account does not have any auth settings, so only plain can be used
+    if(ssoLogin.isEmpty()){
         PopConfiguration popCfg(svcCfg);
-        if(ssoLogin.isEmpty()){
-            qMailLog(POP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< popCfg.id()
-                           << ", using password from accounts configuration";
-        } else {
-            return ssoLogin;
-        }
-        result.append(QByteArray("USER ") + popCfg.mailUserName().toLatin1());
-        result.append(QByteArray("PASS ") + popCfg.mailPassword().toLatin1());
-    }
-
-    return result;
-}
-QByteArray PopAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge, const QList<QByteArray> &ssoLogin)
-{
-    if (ssoLogin.size()) {
-        QByteArray pass = ssoLogin.at(0);
-        return QMailAuthenticator::getResponse(svcCfg, challenge, QString::fromLatin1(pass.constData()));
+        qMailLog(POP) << Q_FUNC_INFO << "SSO identity is not found for account id: "<< popCfg.id()
+                      << ", returning empty authentication";
     } else {
-        return QByteArray();
+        result = ssoLogin.value("PLAIN");
     }
+    return result;
 }
 #else
 QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QStringList &capabilities)
@@ -124,10 +117,13 @@ QList<QByteArray> PopAuthenticator::getAuthentication(const QMailAccountConfigur
 
     return result;
 }
-
+#endif
 QByteArray PopAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
+#ifdef USE_ACCOUNTS_QT
+    return QMailAuthenticator::getResponse(svcCfg, challenge, responseAuthType, authPassword);
+#else
     return QMailAuthenticator::getResponse(svcCfg, challenge);
-}
 #endif
+}
 

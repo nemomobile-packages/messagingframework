@@ -88,52 +88,80 @@ SSOPasswordPlugin::~SSOPasswordPlugin()
 {
 }
 
-QList<QByteArray> SSOPasswordPlugin::getIMAPAuthentication(const QString &password,
-                                                    const QString &username, int serviceAuthentication) const
+QMap<QString, QList<QByteArray> > SSOPasswordPlugin::getIMAPAuthentication(const QString &password,
+                                                    const QString &username) const
 {
-    if (serviceAuthentication == QMail::PlainMechanism) {
-        QByteArray user(username.toLatin1());
-        QByteArray pass(password.toLatin1());
-        return QList<QByteArray>() << QByteArray("AUTHENTICATE PLAIN ") + QByteArray(user + '\0' + user + '\0' + pass).toBase64();
-    } if (serviceAuthentication == QMail::CramMd5Mechanism) {
-        return QList<QByteArray>() << QByteArray(password.toLatin1());
-    } else {
-        return QList<QByteArray>() << QByteArray("LOGIN") + ' ' + quoteIMAPString(username.toLatin1())
-                                   + ' ' + quoteIMAPString(password.toLatin1());
-    }
-}
+    QMap<QString, QList<QByteArray> > result;
 
-QList<QByteArray> SSOPasswordPlugin::getPOPAuthentication(const QString &password,
-                                                   const QString &username, int serviceAuthentication) const
-{
-    QList<QByteArray> result;
-    if (serviceAuthentication == QMail::CramMd5Mechanism) {
-        result.append(QByteArray(password.toLatin1()));
-    } else {
-        result.append(QByteArray("USER ") + username.toLatin1());
-        result.append(QByteArray("PASS ") + password.toLatin1());
-    }
+    // Add PLAIN auth
+    QByteArray user(username.toLatin1());
+    QByteArray pass(password.toLatin1());
+
+    result.insert(QString::fromLatin1("PLAIN"), QList<QByteArray>() << QByteArray("AUTHENTICATE PLAIN ")
+                  + QByteArray(user + '\0' + user + '\0' + pass).toBase64());
+
+    // Add LOGIN auth
+    result.insert(QString::fromLatin1("LOGIN"), QList<QByteArray>() << QByteArray("LOGIN") + ' ' + quoteIMAPString(username.toLatin1())
+                  + ' ' + quoteIMAPString(password.toLatin1()));
+
+    // Add CRAM_MD5
+    QList<QByteArray> cramAuth;
+    cramAuth.append(QByteArray("AUTHENTICATE CRAM-MD5"));
+    cramAuth.append(QByteArray(password.toLatin1()));
+    result.insert(QString::fromLatin1("CRAM-MD5"), cramAuth);
 
     return result;
 }
 
-QList<QByteArray> SSOPasswordPlugin::getSMTPAuthentication(const QString &password,
-                                                    const QString &username, int serviceAuthentication) const
+QMap<QString, QList<QByteArray> > SSOPasswordPlugin::getPOPAuthentication(const QString &password,
+                                                   const QString &username) const
 {
-    QList<QByteArray> result;
+    QMap<QString, QList<QByteArray> > result;
+
+    // Add PLAIN auth
+    QList<QByteArray> plainAuth;
+    plainAuth.append(QByteArray("USER ") + username.toLatin1());
+    plainAuth.append(QByteArray("PASS ") + password.toLatin1());
+    result.insert(QString::fromLatin1("PLAIN"), plainAuth);
+
+    // Currently pop account does not have any auth settings, so only plain can be used
+
+    // Add CRAM-MD5
+    /*QList<QByteArray> cramAuth;
+    cramAuth.append(QByteArray("AUTH CRAM-MD5"));
+    cramAuth.append(QByteArray(password.toLatin1()));
+    result.insert(QString::fromLatin1("CRAM-MD5"), cramAuth);*/
+
+    return result;
+}
+
+QMap<QString, QList<QByteArray> > SSOPasswordPlugin::getSMTPAuthentication(const QString &password,
+                                                    const QString &username) const
+{
+    QMap<QString, QList<QByteArray> > result;
+
     QByteArray user(username.toUtf8());
     QByteArray pass(password.toUtf8());
 
-    if (serviceAuthentication == QMail::LoginMechanism) {
-        result.append(QByteArray("AUTH LOGIN"));
-        result.append(QByteArray(user));
-        result.append(QByteArray(pass));
-    } else if (serviceAuthentication == QMail::PlainMechanism) {
-        result.append(QByteArray("AUTH PLAIN ") + QByteArray(user + '\0' + user + '\0' + pass).toBase64());
-        result.append(QByteArray(user + '\0' + user + '\0' + pass));
-    } else if (serviceAuthentication == QMail::CramMd5Mechanism) {
-        result.append(QByteArray(pass));
-    }
+    // Add PLAIN auth
+    QList<QByteArray> plainAuth;
+    plainAuth.append(QByteArray("AUTH PLAIN ") + QByteArray(user + '\0' + user + '\0' + pass).toBase64());
+    plainAuth.append(QByteArray(user + '\0' + user + '\0' + pass));
+    result.insert(QString::fromLatin1("PLAIN"), plainAuth);
+
+    // Add LOGIN auth
+    QList<QByteArray> loginAuth;
+    loginAuth.append(QByteArray("AUTH LOGIN"));
+    loginAuth.append(QByteArray(user));
+    loginAuth.append(QByteArray(pass));
+    result.insert(QString::fromLatin1("LOGIN"), loginAuth);
+
+    // Add CRAM-MD5 auth
+    QList<QByteArray> cramAuth;
+    cramAuth.append(QByteArray("AUTH CRAM-MD5"));
+    cramAuth.append(QByteArray(pass));
+    result.insert(QString::fromLatin1("CRAM-MD5"), cramAuth);
+
     return result;
 }
 
@@ -146,8 +174,9 @@ QString SSOPasswordPlugin::key() const
 {
     return "password";
 }
-QList<QByteArray> SSOPasswordPlugin::authentication(const SignOn::SessionData &sessionData,
-                                                const QString &serviceType, const QString &userName, int serviceAuthentication) const
+
+QMap<QString, QList<QByteArray> > SSOPasswordPlugin::authentication(const SignOn::SessionData &sessionData,
+                                                const QString &serviceType, const QString &userName) const
 {
     QString password = sessionData.Secret();
     QString username = sessionData.UserName();
@@ -156,13 +185,13 @@ QList<QByteArray> SSOPasswordPlugin::authentication(const SignOn::SessionData &s
         username = userName;
 
     if (serviceType == "imap4") {
-        return getIMAPAuthentication(password, username, serviceAuthentication);
+        return getIMAPAuthentication(password, username);
     } else if (serviceType == "pop3") {
-        return getPOPAuthentication(password, username, serviceAuthentication);
+        return getPOPAuthentication(password, username);
     } else if (serviceType == "smtp") {
-        return getSMTPAuthentication(password, username, serviceAuthentication);
+        return getSMTPAuthentication(password, username);
     } else {
-        return QList<QByteArray>();
+        return QMap<QString, QList<QByteArray> >();
     }
 }
 

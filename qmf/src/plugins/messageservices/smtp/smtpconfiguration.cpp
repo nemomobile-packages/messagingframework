@@ -101,6 +101,10 @@ int SmtpConfiguration::smtpEncryption() const
     return value("encryption", "0").toInt();
 }
 
+bool SmtpConfiguration::smtpAuthFromCapabilities() const
+{
+    return (value("authFromCapabilities", "0").toInt() != 0);
+}
 
 SmtpConfigurationEditor::SmtpConfigurationEditor(QMailAccountConfiguration *config)
     : SmtpConfiguration(*config)
@@ -152,6 +156,11 @@ void SmtpConfigurationEditor::setSmtpAuthentication(int t)
 void SmtpConfigurationEditor::setSmtpEncryption(int t)
 {
     setValue("encryption", QString::number(t));
+}
+
+void SmtpConfigurationEditor::setSmtpAuthFromCapabilities(bool v)
+{
+    setValue("authFromCapabilities", QString::number(v ? 1 : 0));
 }
 
 #endif

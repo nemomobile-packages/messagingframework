@@ -67,7 +67,7 @@
 */
 
 /*!
-    \fn ssoSessionResponse(const QList<QByteArray> &ssoLogin)
+    \fn ssoSessionResponse(const QMap<QString,QList<QByteArray> > &ssoLogin)
 
     This signal is emitted when we receive a reply to a authentication
     request from accounts-sso framework, the authentication details are
@@ -113,7 +113,7 @@ void SSOSessionManager::cancel()
 
 /*!
     Creates a new SSO identity for the account identified by \a id for
-    the service to \a serviceType with the authentication type \a serviceAuthentication.
+    the service to \a serviceType.
 
     Returns true if the account has one email service enabled and a valid identity stored
     in ths accounts-sso database, otherwise returns false.
@@ -125,11 +125,9 @@ void SSOSessionManager::cancel()
     \sa ssoSessionResponse(), ssoSessionError()
 */
 
-bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QString &serviceType,
-                                          int serviceAuthentication)
+bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QString &serviceType)
 {
     deleteSsoIdentity();
-    _serviceAuthentication = serviceAuthentication;
     _serviceType = serviceType;
     _accountId = id.toULongLong();
 
@@ -231,7 +229,6 @@ void SSOSessionManager::credentialsNeedUpdate()
 */
 void SSOSessionManager::deleteSsoIdentity()
 {
-    _ssoLogin = QByteArray();
     _authMethod.clear();
     _serviceType.clear();
     if (_identity) {
@@ -339,7 +336,6 @@ void SSOSessionManager::ssoSessionError(const SignOn::Error &code)
 
     if (_waitForSso) {
         _waitForSso = false;
-        _ssoLogin = QByteArray();
         emit ssoSessionError(QString("SSO error %1: %2").arg(code.type()).arg(code.message()));
     }
 }
@@ -371,8 +367,8 @@ void SSOSessionManager::reAuthenticate()
 
 void SSOSessionManager::sessionResponse(const SignOn::SessionData &sessionData)
 {
-    QList<QByteArray> ssoLogin = _authService->authentication(sessionData, _serviceType,
-                                                          _authUsername, _serviceAuthentication);
+    QMap<QString,QList<QByteArray> > ssoLogin = _authService->authentication(sessionData, _serviceType,
+                                                          _authUsername);
     emit ssoSessionResponse(ssoLogin);
 }
 
