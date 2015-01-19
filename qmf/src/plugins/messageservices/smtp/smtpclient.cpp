@@ -115,6 +115,8 @@ SmtpClient::SmtpClient(QObject* parent)
     , ssoSessionManager(0)
     , loginFailed(false)
     , sendLogin(false)
+    , recreateIdentity(false)
+    , recreateIdentityCount(0)
 {
     connect(QMailStore::instance(), SIGNAL(accountsUpdated(const QMailAccountIdList&)),
             this, SLOT(accountsUpdated(const QMailAccountIdList&)));
@@ -659,6 +661,9 @@ void SmtpClient::nextAction(const QString &response)
                     operationFailed(QMailServiceAction::Status::ErrLoginFailed, response);
                 }
             }
+        } else if (recreateIdentity && recreateIdentityCount < 5) {
+            sendLogin = true;
+            ssoSessionManager->recreateSsoIdentity();
         } else {
             if (!ssoSessionManager->waitForSso()) {
                 QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
@@ -1186,6 +1191,8 @@ void SmtpClient::onSsoSessionResponse(const QMap<QString, QList<QByteArray> > &s
         ssoLogin = ssoCredentials;
         if (sendLogin) {
             sendLogin = false;
+            recreateIdentity = false;
+            recreateIdentityCount = 0;
             QByteArray authCmd(SmtpAuthenticator::getAuthentication(config.serviceConfiguration("smtp"), capabilities, ssoLogin));
             if (!authCmd.isEmpty()) {
                 sendCommand(authCmd);
@@ -1203,6 +1210,9 @@ void SmtpClient::onSsoSessionError(const QString &error)
     // Reset vars
     loginFailed = false;
     sendLogin = false;
+    recreateIdentity = true;
+    // used to prevent a potencial error loop and mutiple calls to sso
+    recreateIdentityCount++;
     qMailLog(SMTP) <<  "Got SSO error:" << error;
     operationFailed(QMailServiceAction::Status::ErrLoginFailed, error);
 }

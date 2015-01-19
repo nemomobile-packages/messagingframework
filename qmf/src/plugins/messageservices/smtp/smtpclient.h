@@ -178,6 +178,8 @@ private:
     SSOSessionManager* ssoSessionManager;
     bool loginFailed;
     bool sendLogin;
+    bool recreateIdentity;
+    int recreateIdentityCount;
     QMap<QString, QList<QByteArray> > ssoLogin;
 #endif
 };
