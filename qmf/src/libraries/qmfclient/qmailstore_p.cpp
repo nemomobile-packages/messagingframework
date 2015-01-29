@@ -3022,7 +3022,7 @@ QMailStorePrivate::QMailStorePrivate(QMailStore* parent)
 QSharedPointer<Accounts::Account> QMailStorePrivate::getEmailAccount(const Accounts::AccountId id)
 {
     //get account from the manager
-    QSharedPointer<Accounts::Account> ssoAccount(manager->account(id));
+    QSharedPointer<Accounts::Account> ssoAccount(Accounts::Account::fromId(manager, id, this));
 
     if (!ssoAccount) {
         qWarning() << Q_FUNC_INFO << "Account with was not found" ;
@@ -10355,14 +10355,16 @@ bool QMailStorePrivate::deleteAccounts(const QMailAccountKey& key,
         // Remove accounts from SSO
         foreach (const QMailAccountId& accountID, deletedAccountIds) {
 
-            QSharedPointer<Accounts::Account> ssoAccount(manager->account(accountID.toULongLong()));
+            QSharedPointer<Accounts::Account> ssoAccount(Accounts::Account::fromId(manager, accountID.toULongLong(), this));
 
             if (ssoAccount) {
                 ssoAccount->remove();
-                if (!ssoAccount->syncAndBlock())
+                if (!ssoAccount->syncAndBlock()) {
                     return false;
-            } else
+                }
+            } else {
                 SSOHandleError(manager->lastError());
+            }
         }
     }
 #else
@@ -10754,7 +10756,7 @@ QMailAccountIdList QMailStorePrivate::searchSSOAccounts(const QMailAccountKey& k
     QMailAccountIdList accountList;
 
     foreach (const Accounts::AccountId& accountID, accountIDList) {
-        Accounts::Account* ssoAccount = manager->account(accountID);
+        Accounts::Account* ssoAccount = Accounts::Account::fromId(manager, accountID, const_cast<QMailStorePrivate*>(this));
         if (!ssoAccount) {
             SSOHandleError(manager->lastError());
             continue;
@@ -10833,7 +10835,7 @@ void QMailStorePrivate::accountUpdated(Accounts::AccountId id)
 
 bool QMailStorePrivate::accountValid(Accounts::AccountId id) const
 {
-    QSharedPointer<Accounts::Account> account(manager->account(id));
+    QSharedPointer<Accounts::Account> account(Accounts::Account::fromId(manager, id, const_cast<QMailStorePrivate*>(this)));
 
     if (!account) {
         SSOHandleError(manager->lastError());
