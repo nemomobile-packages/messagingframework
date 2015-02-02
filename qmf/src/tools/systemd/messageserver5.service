@@ -2,7 +2,7 @@
 Description=messageserver5
 Requires=messageserver5-accounts-check.service
 Requires=booster-qt5.service
-After=booster-qt5.service
+After=msyncd.service
 After=messageserver5-accounts-check.service
 
 [Service]

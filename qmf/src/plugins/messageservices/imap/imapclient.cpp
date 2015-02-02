@@ -586,6 +586,7 @@ ImapClient::ImapClient(QObject* parent)
       _rapidClosing(false),
       _idleRetryDelay(InitialIdleRetryDelay),
       _pushConnectionsReserved(0),
+      _pushEnabled(0),
       _ssoSessionManager(0),
       _loginFailed(false),
       _sendLogin(false),
@@ -648,7 +649,8 @@ ImapClient::ImapClient(QObject* parent)
       _requestRapidClose(false),
       _rapidClosing(false),
       _idleRetryDelay(InitialIdleRetryDelay),
-      _pushConnectionsReserved(0)
+      _pushConnectionsReserved(0),
+      _pushEnabled(0)
 {
     static int count(0);
     ++count;
@@ -887,8 +889,7 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
                 }
             }
 
-            // We are now connected
-            ImapConfiguration imapCfg(_config);            
+            // We are now connected          
             _waitingForIdleFolderIds = configurationIdleFolderIds();
 
             if (!_idlesEstablished
@@ -897,9 +898,17 @@ void ImapClient::commandTransition(ImapCommand command, OperationStatus status)
                 && _pushConnectionsReserved) {
                 _waitingForIdle = true;
                 emit updateStatus( tr("Logging in idle connection" ) );
+#ifdef USE_ACCOUNTS_QT
+                if (_ssoSessionManager) {
+                    ssoProcessLogin();
+                } else {
+                   monitor(_waitingForIdleFolderIds);
+                }
+#else
                 monitor(_waitingForIdleFolderIds);
+#endif
             } else {
-                if (!imapCfg.pushEnabled()) {
+                if (!pushEnabled()) {
                     foreach(const QMailFolderId &id, _monitored.keys()) {
                         IdleProtocol *protocol = _monitored.take(id);
                         protocol->close();
@@ -1874,8 +1883,7 @@ bool ImapClient::loggingIn() const
 
 bool ImapClient::idlesEstablished()
 {
-    ImapConfiguration imapCfg(_config);
-    if (!imapCfg.pushEnabled())
+    if (!pushEnabled())
         return true;
 
     return _idlesEstablished;
@@ -1898,8 +1906,9 @@ QMailFolderIdList ImapClient::configurationIdleFolderIds()
 {
     ImapConfiguration imapCfg(_config);            
     QMailFolderIdList folderIds;
-    if (!imapCfg.pushEnabled())
+    if (!pushEnabled()) {
         return folderIds;
+    }
     foreach(QString folderName, imapCfg.pushFolders()) {
         QMailFolderId idleFolderId(mailboxId(folderName));
         if (idleFolderId.isValid()) {
@@ -1915,7 +1924,7 @@ void ImapClient::monitor(const QMailFolderIdList &mailboxIds)
     
     ImapConfiguration imapCfg(_config);
     if (!_protocol.supportsCapability("IDLE")
-        || !imapCfg.pushEnabled()) {
+        || !pushEnabled()) {
         return;
     }
     
@@ -2003,6 +2012,26 @@ void ImapClient::removeAllFromBuffer(QMailMessage *message)
     }
 }
 
+bool ImapClient::pushEnabled()
+{
+    bool pushEnabled;
+#ifdef USE_KEEPALIVE
+    pushEnabled = _pushEnabled;
+#else
+    ImapConfiguration imapCfg(_config);
+    pushEnabled = imapCfg.pushEnabled();
+#endif
+    return pushEnabled;
+}
+
+void ImapClient::setPushEnabled(bool state)
+{
+    if (_pushEnabled != state) {
+        qMailLog(Messaging) << Q_FUNC_INFO << "Setting push enabled state to " << state;
+        _pushEnabled = state;
+    }
+}
+
 #ifdef USE_ACCOUNTS_QT
 void ImapClient::removeSsoIdentity(const QMailAccountId &accountId)
 {
@@ -2018,7 +2047,7 @@ void ImapClient::removeSsoIdentity(const QMailAccountId &accountId)
 
 void ImapClient::ssoProcessLogin()
 {
-    if (_loginFailed && _recreateIdentity) {
+    if ((_loginFailed && _recreateIdentity) || _waitingForIdle) {
         // if account was updated try to recreate
         // identity without asking the user for new
         // credentials
@@ -2060,6 +2089,9 @@ void ImapClient::onSsoSessionResponse(const QMap<QString,QList<QByteArray> > &ss
     if (_sendLogin) {
         _protocol.sendLogin(_config, _ssoLogin);
     }
+    if (_waitingForIdle) {
+        monitor(_waitingForIdleFolderIds);
+    }
 }
 
 void ImapClient::onSsoSessionError(const QString &error)
@@ -2091,6 +2123,14 @@ void ImapClient::onAccountsUpdated(const QMailAccountIdList &list)
         }
 
         qMailLog(IMAP) << Q_FUNC_INFO << imapCfg1.mailUserName() ;
+#ifdef USE_KEEPALIVE
+        // compare config modified by the User
+        const bool& notEqual = (imapCfg1.mailUserName() != imapCfg2.mailUserName()) ||
+                               (imapCfg1.mailPassword() != imapCfg2.mailPassword()) ||
+                               (imapCfg1.mailServer() != imapCfg2.mailServer()) ||
+                               (imapCfg1.mailPort() != imapCfg2.mailPort()) ||
+                               (imapCfg1.mailEncryption() != imapCfg2.mailEncryption());
+#else
         // compare config modified by the User
         const bool& notEqual = (imapCfg1.mailUserName() != imapCfg2.mailUserName()) ||
                                (imapCfg1.mailPassword() != imapCfg2.mailPassword()) ||
@@ -2098,33 +2138,34 @@ void ImapClient::onAccountsUpdated(const QMailAccountIdList &list)
                                (imapCfg1.mailPort() != imapCfg2.mailPort()) ||
                                (imapCfg1.mailEncryption() != imapCfg2.mailEncryption()) ||
                                (imapCfg1.pushEnabled() != imapCfg2.pushEnabled());
+#endif
         if (notEqual)
             closeIdleConnections();
 
+#ifndef USE_KEEPALIVE
         if (imapCfg1.pushEnabled() != imapCfg2.pushEnabled()) {
             if (imapCfg2.pushEnabled())
                 emit restartPushEmail();
         }
+#endif
     }
 }
+#endif
 
 void ImapClient::closeIdleConnections()
 {
     qMailLog(IMAP) << Q_FUNC_INFO << "Account was modified. Closing connections";
 
     closeConnection();
-#ifdef USE_KEEPALIVE
-    emit stopPushEmail();
-#endif
     // closing idle connections
     foreach(const QMailFolderId &id, _monitored.keys()) {
         IdleProtocol *protocol = _monitored.take(id);
-        protocol->close();
+        if (protocol->inUse()) {
+            protocol->close();
+        }
         delete protocol;
     }
     _idlesEstablished = false;
 }
-
-#endif
 
 #include "imapclient.moc"

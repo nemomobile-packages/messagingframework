@@ -80,6 +80,7 @@ protected slots:
 
 #ifdef USE_KEEPALIVE
     void stopPushEmail();
+    void pushEnabledStatus(uint accountId, const QString &profileType, bool state);
 #endif
 
 private:
@@ -101,6 +102,8 @@ private:
     QTimer *_initiatePushEmailTimer;
 #ifdef USE_KEEPALIVE
     BackgroundActivity* _backgroundActivity;
+    bool _accountPushEnabled;
+    bool _buteoReplyReceived;
 #endif
 };
 
