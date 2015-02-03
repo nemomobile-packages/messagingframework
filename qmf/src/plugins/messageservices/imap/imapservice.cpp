@@ -1529,8 +1529,10 @@ ImapService::ImapService(const QMailAccountId &accountId)
     connect(_initiatePushEmailTimer, SIGNAL(timeout()), this, SLOT(initiatePushEmail()));
 
 #ifdef USE_KEEPALIVE
+     _idling = false;
     _backgroundActivity = new BackgroundActivity(this);
     _backgroundActivity->setWakeupFrequency(BackgroundActivity::ThirtySeconds);
+    connect(_backgroundActivity, SIGNAL(running()), this, SLOT(onUpdateLastSyncTime()));
 
     // Connect to dbus signals emitted by buteo notifying schedule changes
     QDBusConnection m_dBusConnection(QDBusConnection::sessionBus());
@@ -1634,6 +1636,7 @@ void ImapService::disable()
     _restartPushEmailTimer->stop();
     _initiatePushEmailTimer->stop();
 #ifdef USE_KEEPALIVE
+    _idling = false;
     _backgroundActivity->stop();
 #endif
     _source->setIntervalTimer(0);
@@ -1771,6 +1774,7 @@ void ImapService::initiatePushEmail()
     _restartPushEmailTimer->stop();
     _initiatePushEmailTimer->stop();
 #ifdef USE_KEEPALIVE
+     _idling = false;
     if (_backgroundActivity->isRunning()) {
         _backgroundActivity->stop();
         qMailLog(Messaging) << Q_FUNC_INFO <<  "Stopping keepalive";
@@ -1787,7 +1791,8 @@ void ImapService::initiatePushEmail()
         _establishingPushEmail = true;
 #ifdef USE_KEEPALIVE
         qMailLog(Messaging) << Q_FUNC_INFO <<  "Starting keepalive";
-        _backgroundActivity->run();
+         _idling = true;
+        _backgroundActivity->wait();
 #endif
         QMailAccount account(_accountId);
         const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
@@ -1848,11 +1853,22 @@ void ImapService::updateStatus(const QString &text)
 }
 
 #ifdef USE_KEEPALIVE
+void ImapService::onUpdateLastSyncTime()
+{
+    // start timer again if still in idle mode
+    if (_idling) {
+        _backgroundActivity->wait();
+    } else if (_backgroundActivity->isRunning()){
+        qMailLog(Messaging) << Q_FUNC_INFO << "Stopping keepalive";
+        _backgroundActivity->stop();
+    }
+}
+
 void ImapService::stopPushEmail()
 {
     qMailLog(Messaging) << "Stopping push email for account" << _accountId
                         << QMailAccount(_accountId).name();
-
+    _idling = false;
     QMailAccount account(_accountId);
     const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
     if (hasPersistentConnection) {

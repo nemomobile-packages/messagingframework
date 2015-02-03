@@ -2026,7 +2026,7 @@ bool ImapClient::pushEnabled()
 
 void ImapClient::setPushEnabled(bool state)
 {
-    if (_pushEnabled != state) {
+    if (pushEnabled() != state) {
         qMailLog(Messaging) << Q_FUNC_INFO << "Setting push enabled state to " << state;
         _pushEnabled = state;
     }
@@ -2088,8 +2088,7 @@ void ImapClient::onSsoSessionResponse(const QMap<QString,QList<QByteArray> > &ss
     }
     if (_sendLogin) {
         _protocol.sendLogin(_config, _ssoLogin);
-    }
-    if (_waitingForIdle) {
+    } else if (_waitingForIdle) {
         monitor(_waitingForIdleFolderIds);
     }
 }
