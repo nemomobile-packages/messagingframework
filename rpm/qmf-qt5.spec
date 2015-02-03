@@ -15,7 +15,7 @@ BuildRequires:  pkgconfig(Qt5Test)
 BuildRequires: 	pkgconfig(Qt5Network)
 #BuildRequires: pkgconfig(Qt5Webkit)
 BuildRequires:  pkgconfig(Qt5Sql)
-BuildRequires:  pkgconfig(accounts-qt5)
+BuildRequires:  pkgconfig(accounts-qt5) >= 1.13
 BuildRequires:  pkgconfig(libsignon-qt5)
 BuildRequires:  pkgconfig(keepalive)
 BuildRequires:  pkgconfig(qt5-boostable)

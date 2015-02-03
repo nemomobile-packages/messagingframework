@@ -132,7 +132,7 @@ bool SSOSessionManager::createSsoIdentity(const QMailAccountId &id, const QStrin
     _accountId = id.toULongLong();
 
     SSOAccountManager manager;
-    QScopedPointer<Accounts::Account> account(manager->account(static_cast<Accounts::AccountId>(_accountId)));
+    QScopedPointer<Accounts::Account> account(Accounts::Account::fromId(manager, static_cast<Accounts::AccountId>(_accountId), this));
     if (!account)
         return false;
 
