@@ -23,6 +23,7 @@ QT = core network
 
 contains(DEFINES, USE_KEEPALIVE) {
     PKGCONFIG += keepalive
+    QT += dbus
 }
 
 contains(DEFINES,QT_QMF_USE_ALIGNEDTIMER) {

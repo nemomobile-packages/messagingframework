@@ -79,7 +79,6 @@ public:
     void setAccount(const QMailAccountId& accountId);
 #ifdef USE_ACCOUNTS_QT
     void removeSsoIdentity(const QMailAccountId& accountId);
-    void closeIdleConnections();
 #endif
     QMailAccountId account() const;
     void requestRapidClose() { _requestRapidClose = true; } // Close connection ASAP, unless interactive checking occurred recently
@@ -87,6 +86,7 @@ public:
     void newConnection();
     void cancelTransfer(QMailServiceAction::Status::ErrorCode code, const QString &text);
     void closeConnection();
+    void closeIdleConnections();
 
     ImapStrategyContext *strategyContext();
 
@@ -113,6 +113,8 @@ public:
     void setPushConnectionsReserved(int reserved) { _pushConnectionsReserved = reserved; }
     int idleRetryDelay() const { return _idleRetryDelay; }
     void setIdleRetryDelay(int delay) { _idleRetryDelay = delay; }
+    bool pushEnabled();
+    void setPushEnabled(bool state);
 
 signals:
     void errorOccurred(int, const QString &);
@@ -208,6 +210,7 @@ private:
     QList<QMailMessageBufferFlushCallback*> callbacks;
     QVector<QMailMessage*> _bufferedMessages;
     int _pushConnectionsReserved;
+    bool _pushEnabled;
 
     QMap<QMailMessageId,QString> detachedTempFiles;
 

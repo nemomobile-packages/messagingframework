@@ -11,6 +11,7 @@ BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(icu-i18n)
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Gui)
+BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(Qt5Test)
 BuildRequires: 	pkgconfig(Qt5Network)
 #BuildRequires: pkgconfig(Qt5Webkit)
@@ -24,6 +25,7 @@ BuildRequires:  qt5-qttools-qthelp-devel
 BuildRequires:  qt5-plugin-platform-minimal
 BuildRequires:  qt5-plugin-sqldriver-sqlite
 BuildRequires:  fdupes
+Requires:       buteo-syncfw-qt5 >= 0.7.14 
 
 %description
 The Qt Messaging Framework, QMF, consists of a C++ library and daemon server
