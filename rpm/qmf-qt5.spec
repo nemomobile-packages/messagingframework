@@ -1,6 +1,6 @@
 Name: qmf-qt5
 Summary:    Qt Messaging Framework (QMF) Qt5
-Version:    4.0.4+git39
+Version:    4.0.4+git42
 Release:    1
 Group:      System/Libraries
 License:    LGPLv2.1 with exception or GPLv3
@@ -25,7 +25,7 @@ BuildRequires:  qt5-qttools-qthelp-devel
 BuildRequires:  qt5-plugin-platform-minimal
 BuildRequires:  qt5-plugin-sqldriver-sqlite
 BuildRequires:  fdupes
-Requires:       buteo-syncfw-qt5 >= 0.7.14 
+Requires:       buteo-syncfw-qt5 >= 0.7.16 
 
 %description
 The Qt Messaging Framework, QMF, consists of a C++ library and daemon server
