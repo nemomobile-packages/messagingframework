@@ -99,7 +99,7 @@ static QMail::SaslMechanism authFromCapabilities(const QStringList &capabilities
     if (authCaps.contains("CRAM-MD5", Qt::CaseInsensitive) && ssoLogin.contains("CRAM-MD5")) {
         qMailLog(IMAP) << "Returning auth CRAM-MD5";
         return QMail::CramMd5Mechanism;
-    } else if (authCaps.contains("LOGIN", Qt::CaseInsensitive) && !authCaps.contains("PLAIN", Qt::CaseInsensitive)
+    } else if (!authCaps.contains("PLAIN", Qt::CaseInsensitive)
                && !capabilities.contains("LOGINDISABLED", Qt::CaseInsensitive) && ssoLogin.contains("LOGIN")) {
         qMailLog(IMAP) <<  "Returning auth LOGIN";
         // According to RFC3501, LOGIN should be used as last resort(for retro-compatibility)
