@@ -1616,17 +1616,7 @@ void ImapService::disable()
 {
     QMailAccountConfiguration accountCfg(_accountId);
     ImapConfiguration imapCfg(accountCfg);
-    QMailAccount account(_accountId);
-    const bool hasPersistentConnection = (account.status() & QMailAccount::HasPersistentConnection);
-    if (hasPersistentConnection) {
-        account.setStatus(QMailAccount::HasPersistentConnection, false);
-        account.setLastSynchronized(QMailTimeStamp::currentDateTime());
-        if (!QMailStore::instance()->updateAccount(&account)) {
-            qWarning() << "Unable to update account" << account.id() << "to HasPersistentConnection" << false;
-        } else {
-            qMailLog(Messaging) <<  "HasPersistentConnection for " << account.id() << "changed to" << false;
-        }
-    }
+    setPersistentConnectionStatus(false);
     _accountWasEnabled = false;
     _accountWasPushEnabled = accountPushEnabled();
     _previousPushFolders = imapCfg.pushFolders();
@@ -1942,7 +1932,7 @@ void ImapService::onOnlineStateChanged(bool isOnline)
     qMailLog(Messaging) << "IDLE Session: Network state changed: " << isOnline;
     if (accountPushEnabled() && isOnline && (!_networkSession || _networkSession->state() != QNetworkSession::Connected)) {
         openIdleSession();
-    } else {
+    } else  if (!isOnline) {
         onSessionError(QNetworkSession::InvalidConfigurationError);
         closeIdleSession();
     }
