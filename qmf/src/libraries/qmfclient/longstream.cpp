@@ -87,13 +87,16 @@ LongStream::~LongStream()
 
 void LongStream::reset()
 {
-    delete ts;
-
     tmpFile->resize( 0 );
     tmpFile->close();
     tmpFile->open();
 
-    ts = new QDataStream( tmpFile );
+    if (ts) {
+        ts->setDevice(tmpFile);
+    } else {
+        ts = new QDataStream( tmpFile );
+    }
+
     len = 0;
     appendedBytes = minCheck;
 
@@ -105,8 +108,6 @@ QString LongStream::detach()
 {
     QString detachedName = fileName();
 
-    delete ts;
-
     tmpFile->setAutoRemove(false);
     tmpFile->close();
     delete tmpFile;
@@ -117,7 +118,12 @@ QString LongStream::detach()
     tmpFile->open();
     tmpFile->setPermissions(QFile::ReadOwner | QFile::WriteOwner);
 
-    ts = new QDataStream( tmpFile );
+    if (ts) {
+        ts->setDevice(tmpFile);
+    } else {
+        ts = new QDataStream( tmpFile );
+    }
+
     len = 0;
     appendedBytes = minCheck;
 
