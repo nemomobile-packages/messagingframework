@@ -94,20 +94,22 @@ QMap<QString, QList<QByteArray> > SSOPasswordPlugin::getIMAPAuthentication(const
     QMap<QString, QList<QByteArray> > result;
 
     // Add PLAIN auth
-    QByteArray user(username.toLatin1());
-    QByteArray pass(password.toLatin1());
+    QByteArray user(username.toUtf8());
+    QByteArray pass(password.toUtf8());
 
-    result.insert(QString::fromLatin1("PLAIN"), QList<QByteArray>() << QByteArray("AUTHENTICATE PLAIN ")
-                  + QByteArray(user + '\0' + user + '\0' + pass).toBase64());
+    QList<QByteArray> plainAuth;
+    plainAuth.append(QByteArray("AUTHENTICATE PLAIN"));
+    plainAuth.append(QByteArray(user + '\0' + user + '\0' + pass));
+    result.insert(QString::fromLatin1("PLAIN"), plainAuth);
 
     // Add LOGIN auth
-    result.insert(QString::fromLatin1("LOGIN"), QList<QByteArray>() << QByteArray("LOGIN") + ' ' + quoteIMAPString(username.toLatin1())
-                  + ' ' + quoteIMAPString(password.toLatin1()));
+    result.insert(QString::fromLatin1("LOGIN"), QList<QByteArray>() << QByteArray("LOGIN") + ' ' + quoteIMAPString(username.toUtf8())
+                  + ' ' + quoteIMAPString(password.toUtf8()));
 
     // Add CRAM_MD5
     QList<QByteArray> cramAuth;
     cramAuth.append(QByteArray("AUTHENTICATE CRAM-MD5"));
-    cramAuth.append(QByteArray(password.toLatin1()));
+    cramAuth.append(QByteArray(password.toUtf8()));
     result.insert(QString::fromLatin1("CRAM-MD5"), cramAuth);
 
     return result;
@@ -120,8 +122,8 @@ QMap<QString, QList<QByteArray> > SSOPasswordPlugin::getPOPAuthentication(const 
 
     // Add PLAIN auth
     QList<QByteArray> plainAuth;
-    plainAuth.append(QByteArray("USER ") + username.toLatin1());
-    plainAuth.append(QByteArray("PASS ") + password.toLatin1());
+    plainAuth.append(QByteArray("USER ") + username.toUtf8());
+    plainAuth.append(QByteArray("PASS ") + password.toUtf8());
     result.insert(QString::fromLatin1("PLAIN"), plainAuth);
 
     // Currently pop account does not have any auth settings, so only plain can be used

@@ -52,11 +52,11 @@
 
 namespace {
 
-QMap<QMailAccountId, QList<QByteArray> > gResponses;
 
 #ifdef USE_ACCOUNTS_QT
 QString authPassword;
 QMail::SaslMechanism responseAuthType;
+QByteArray gResponse;
 #endif
 }
 
@@ -127,7 +127,9 @@ static QByteArray authenticationResponses(QList<QByteArray> &authList, const QMa
                 authPassword = QString::fromLatin1(authList.takeFirst());
                 responseAuthType = QMail::CramMd5Mechanism;
             } else {
-                gResponses[id] = authList;
+                gResponse = authList.first();
+                // We need to clean this state, both the other auths available will work the same way
+                responseAuthType = QMail::PlainMechanism;
             }
         }
     } else {
@@ -210,7 +212,10 @@ QByteArray ImapAuthenticator::getAuthentication(const QMailAccountConfiguration:
 QByteArray ImapAuthenticator::getResponse(const QMailAccountConfiguration::ServiceConfiguration &svcCfg, const QByteArray &challenge)
 {
 #ifdef USE_ACCOUNTS_QT
-    return QMailAuthenticator::getResponse(svcCfg, challenge, responseAuthType, authPassword);
+    if (responseAuthType == QMail::CramMd5Mechanism) {
+        return QMailAuthenticator::getResponse(svcCfg, challenge, responseAuthType, authPassword);
+    }
+    return gResponse;
 #else
     return QMailAuthenticator::getResponse(svcCfg, challenge);
 #endif
