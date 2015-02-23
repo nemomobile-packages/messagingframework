@@ -2887,6 +2887,7 @@ ImapProtocol::ImapProtocol()
 
 ImapProtocol::~ImapProtocol()
 {
+    _incomingDataTimer.stop();
     delete _transport;
     delete _fsm;
 }
