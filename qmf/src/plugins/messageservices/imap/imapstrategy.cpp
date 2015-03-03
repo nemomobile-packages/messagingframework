@@ -155,13 +155,14 @@ bool updateMessagesMetaData(ImapStrategyContextBase *context,
                                    const QMailMessageKey &storedKey, 
                                    const QMailMessageKey &unseenKey, 
                                    const QMailMessageKey &seenKey,
+                                   const QMailMessageKey &flaggedAsDeleted,
                                    const QMailMessageKey &flaggedKey,
                                    const QMailMessageKey &unreadElsewhereKey,
                                    const QMailMessageKey &importantElsewhereKey,
                                    const QMailMessageKey &unavailableKey)
 {
     bool result = true;
-    QMailMessageKey reportedKey(seenKey | unseenKey);
+    QMailMessageKey reportedKey((seenKey | unseenKey)  & ~flaggedAsDeleted);
     QMailMessageKey unflaggedKey(reportedKey & ~flaggedKey);
 
     // Mark as deleted any messages that the server does not report
@@ -416,6 +417,22 @@ QSet<QMailFolderId> foldersApplicableTo(QMailMessageKey const& messagekey, QSet<
     } else {
         return (total & result.first) - result.second;
     }
+}
+
+QStringList flaggedAsDeletedUids(ImapStrategyContextBase *context)
+{
+    QStringList flaggedAsDeleted;
+    const ImapMailboxProperties &properties(context->mailbox());
+    foreach(FlagChange change, properties.flagChanges) {
+        QString uidStr(stripFolderPrefix(change.first));
+        MessageFlags flags(change.second);
+        if (!uidStr.isEmpty()) {
+            if (flags & MFlag_Deleted) {
+                flaggedAsDeleted.append(uidStr);
+            }
+        }
+    }
+    return flaggedAsDeleted;
 }
 
 }
@@ -2692,6 +2709,9 @@ void ImapSynchronizeAllStrategy::processUidSearchResults(ImapStrategyContextBase
         qWarning() << "Unable to update folder for account:" << context->config().id();
     }
 
+    // Check if any of the message is flagged as deleted on server side and not expunged yet
+    QStringList flaggedAsRemovedUids = flaggedAsDeletedUids(context);
+
     // Messages reported as being on the server
     QStringList reportedOnServerUids = _seenUids + _unseenUids;
 
@@ -2723,13 +2743,14 @@ void ImapSynchronizeAllStrategy::processUidSearchResults(ImapStrategyContextBase
         QMailMessageKey seenKey(QMailMessageKey::serverUid(_seenUids));
         QMailMessageKey flaggedKey(QMailMessageKey::serverUid(_flaggedUids));
         QMailMessageKey importantElsewhereKey(QMailMessageKey::status(QMailMessage::ImportantElsewhere, QMailDataComparator::Includes));
+        QMailMessageKey flaggedAsRemoved(QMailMessageKey::serverUid(flaggedAsRemovedUids));
         
         // Only delete messages the server still has
         _removedUids = inFirstAndSecond(deletedUids, reportedOnServerUids);
         _expungeRequired = !_removedUids.isEmpty();
 
         if (_options & ImportChanges) {
-            if (!updateMessagesMetaData(context, storedKey, unseenKey, seenKey, flaggedKey, unreadElsewhereKey, importantElsewhereKey, unavailableKey)) {
+            if (!updateMessagesMetaData(context, storedKey, unseenKey, seenKey, flaggedAsRemoved, flaggedKey, unreadElsewhereKey, importantElsewhereKey, unavailableKey)) {
                 _error = true;
             }
         }
@@ -3250,6 +3271,9 @@ void ImapUpdateMessagesFlagsStrategy::processUidSearchResults(ImapStrategyContex
         processNextFolder(context);
         return;
     }
+
+    // Check if any of the message is flagged as deleted on server side and not expunged yet
+    QStringList flaggedAsRemovedUids = flaggedAsDeletedUids(context);
     
     // Compare the server message list with our message list
     QMailMessageKey accountKey(QMailMessageKey::parentAccountId(context->config().id()));
@@ -3263,8 +3287,9 @@ void ImapUpdateMessagesFlagsStrategy::processUidSearchResults(ImapStrategyContex
     QMailMessageKey unavailableKey(folderKey & accountKey & removedStatusKey);
     QMailMessageKey flaggedKey(QMailMessageKey::serverUid(_flaggedUids));
     QMailMessageKey importantElsewhereKey(QMailMessageKey::status(QMailMessage::ImportantElsewhere, QMailDataComparator::Includes));
+    QMailMessageKey flaggedAsRemoved(QMailMessageKey::serverUid(flaggedAsRemovedUids));
 
-    if (!updateMessagesMetaData(context, storedKey, unseenKey, seenKey, flaggedKey, unreadElsewhereKey, importantElsewhereKey, unavailableKey))
+    if (!updateMessagesMetaData(context, storedKey, unseenKey, seenKey, flaggedAsRemoved, flaggedKey, unreadElsewhereKey, importantElsewhereKey, unavailableKey))
         _error = true;
 
     processNextFolder(context);
@@ -3401,6 +3426,8 @@ static void processFlagChanges(const QList<FlagChange> &changes, const QMailFold
     IntegerRegion unread;
     IntegerRegion important;
     IntegerRegion notImportant;
+    IntegerRegion deletedElsewhere;
+    IntegerRegion undeleted;
     foreach(FlagChange change, changes) {
         bool ok;
         QString uidStr(stripFolderPrefix(change.first));
@@ -3417,6 +3444,11 @@ static void processFlagChanges(const QList<FlagChange> &changes, const QMailFold
             } else {
                 notImportant.add(uid);
             }
+            if (flags & MFlag_Deleted) {
+                deletedElsewhere.add(uid);
+            } else {
+                undeleted.add(uid);
+            }
         }
     }
     markMessages(read, QMailMessage::Read, true, id, _error);
@@ -3427,6 +3459,8 @@ static void processFlagChanges(const QList<FlagChange> &changes, const QMailFold
     markMessages(important, QMailMessage::ImportantElsewhere, true, id, _error);
     markMessages(notImportant, QMailMessage::Important, false, id, _error);
     markMessages(notImportant, QMailMessage::ImportantElsewhere, false, id, _error);
+    markMessages(deletedElsewhere, QMailMessage::Removed, true, id, _error);
+    markMessages(undeleted, QMailMessage::Removed, false, id, _error);
 }
 
 void ImapRetrieveMessageListStrategy::handleFetchFlags(ImapStrategyContextBase *context)
@@ -3612,11 +3646,6 @@ void ImapRetrieveMessageListStrategy::folderListFolderAction(ImapStrategyContext
     const ImapMailboxProperties &properties(context->mailbox());
     uint minimum(_minimum);
     QMailMessageKey sourceKey(QMailDisconnected::sourceKey(properties.id));
-
-    // Purge messages marked as removed, facilitates detection of messages missign on client, and prevents cruft building up
-    if (!purge(context, sourceKey & QMailMessageKey::status(QMailMessage::Removed))) {
-        _error = true;
-    }
 
     // Could get flag changes mod sequences when CONDSTORE is available
     if ((properties.exists == 0) || (minimum <= 0)) {
