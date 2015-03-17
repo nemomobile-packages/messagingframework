@@ -26,6 +26,10 @@ equals(QT_MAJOR_VERSION, 5){
 CONFIG += qmfmessageserver qmfclient
 QT = core
 
+contains(DEFINES, USE_HTML_PARSER) {
+    QT += gui
+}
+
 !contains(DEFINES,QMF_NO_MESSAGE_SERVICE_EDITOR) {
     QT += gui
     equals(QT_MAJOR_VERSION, 5): QT += widgets

@@ -134,6 +134,7 @@ This package contains the documentation for Qt Messaging Framework (QMF).
     DEFINES+=MESSAGESERVER_PLUGINS \
     DEFINES+=QMF_NO_MESSAGE_SERVICE_EDITOR \
     DEFINES+=USE_KEEPALIVE \
+    DEFINES+=USE_HTML_PARSER \
     CONFIG+=syslog
 
 make %{?_smp_mflags}
