@@ -8644,6 +8644,7 @@ void QMailMessage::refreshPreview()
             }
             plainText.replace(pos, semicolon-pos+1, QChar(code));
         }
+#endif
     }
 #ifdef USE_HTML_PARSER
     metaDataImpl()->setPreview(htmlToPlainText(plainText).left(maxPreviewLength));
