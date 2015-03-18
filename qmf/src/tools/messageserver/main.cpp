@@ -45,13 +45,20 @@
 #include <qmaillog.h>
 #include <qloggers.h>
 #include <signal.h>
+#ifdef USE_HTML_PARSER
+#include <QtGui>
+#endif
 
 #if !defined(NO_SHUTDOWN_SIGNAL_HANDLING) && defined(Q_OS_UNIX)
 
 static void shutdown(int n)
 {
     qMailLog(Messaging) << "Received signal" << n << ", shutting down.";
+#ifdef USE_HTML_PARSER
+    QGuiApplication::exit();
+#else
     QCoreApplication::exit();
+#endif
 }
 #endif
 
@@ -66,7 +73,12 @@ static void recreateLoggers(int n)
 
 Q_DECL_EXPORT int main(int argc, char** argv)
 {
+#ifdef USE_HTML_PARSER
+    // Need for html parsing by <QTextdocument> in qmailmessage.cpp
+    QGuiApplication app(argc, argv);
+#else
     QCoreApplication app(argc, argv);
+#endif
 
     // This is ~/.config/QtProject/Messageserver.conf
     qMailLoggersRecreate("QtProject", "Messageserver", "Msgsrv");

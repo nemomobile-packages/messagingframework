@@ -814,6 +814,9 @@ private:
 
     static QMailMessage fromRfc2822(LongString& ls);
     void refreshPreview();
+#ifdef USE_HTML_PARSER
+    static QString htmlToPlainText(const QString &html);
+#endif
 
 public:
     virtual QString preview() const;

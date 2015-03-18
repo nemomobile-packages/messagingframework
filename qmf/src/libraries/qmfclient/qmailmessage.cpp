@@ -62,6 +62,9 @@
 #include <qtextcodec.h>
 #include <QTextCodec>
 #include <QtDebug>
+#ifdef USE_HTML_PARSER
+#include <QTextDocument>
+#endif
 
 #include <stdlib.h>
 #include <limits.h>
@@ -8601,50 +8604,65 @@ void QMailMessage::refreshPreview()
 {
     const int maxPreviewLength = 280;
     // TODO: don't load entire body into memory
-    // TODO: parse html correctly, e.g. closing brackets in quotes in tags
     QMailMessagePartContainer *htmlPart= findHtmlContainer();
     QMailMessagePartContainer *plainTextPart= findPlainTextContainer();
+    QString plainText;
 
     if (multipartType() == MultipartRelated && htmlPart) // force taking the html in this case
         plainTextPart=0;
 
     if ( plainTextPart && plainTextPart->hasBody()) {
-        QString plaintext(plainTextPart->body().data());
-        plaintext.remove(QRegExp("\\[(image|cid):[^\\]]*\\]", Qt::CaseInsensitive));
-        metaDataImpl()->setPreview(plaintext.left(maxPreviewLength));
+        plainText = plainTextPart->body().data();
+        // These are not valid html, so remove them before
+        plainText.remove(QRegExp("\\[(image|cid):[^\\]]*\\]", Qt::CaseInsensitive));
     } else if (htmlPart && ( multipartType() == MultipartRelated || htmlPart->hasBody())) {
-        QString markup = htmlPart->body().data();
-        markup.remove(QRegExp("<\\s*(style|head|form|script)[^<]*<\\s*/\\s*\\1\\s*>", Qt::CaseInsensitive));
-        markup.remove(QRegExp("<(.)[^>]*>"));
-        markup.replace("&quot;", "\"", Qt::CaseInsensitive);
-        markup.replace("&nbsp;", " ", Qt::CaseInsensitive);
-        markup.replace("&amp;", "&", Qt::CaseInsensitive);
-        markup.replace("&lt;", "<", Qt::CaseInsensitive);
-        markup.replace("&gt;", ">", Qt::CaseInsensitive);
+        plainText = htmlPart->body().data();
+
+#ifndef USE_HTML_PARSER
+        plainText.remove(QRegExp("<\\s*(style|head|form|script)[^<]*<\\s*/\\s*\\1\\s*>", Qt::CaseInsensitive));
+        plainText.remove(QRegExp("<(.)[^>]*>"));
+        plainText.replace("&quot;", "\"", Qt::CaseInsensitive);
+        plainText.replace("&nbsp;", " ", Qt::CaseInsensitive);
+        plainText.replace("&amp;", "&", Qt::CaseInsensitive);
+        plainText.replace("&lt;", "<", Qt::CaseInsensitive);
+        plainText.replace("&gt;", ">", Qt::CaseInsensitive);
 
         // now replace stuff like "&#1084;"
         for (int pos = 0; ; ) {
-            pos = markup.indexOf("&#", pos);
+            pos = plainText.indexOf("&#", pos);
             if (pos < 0)
                 break;
-            int semicolon = markup.indexOf(';', pos+2);
+            int semicolon = plainText.indexOf(';', pos+2);
             if (semicolon < 0) {
                 ++pos;
                 continue;
             }
-            int code = (markup.mid(pos+2, semicolon-pos-2)).toInt();
+            int code = (plainText.mid(pos+2, semicolon-pos-2)).toInt();
             if (code == 0) {
                 ++pos;
                 continue;
             }
-            markup.replace(pos, semicolon-pos+1, QChar(code));
+            plainText.replace(pos, semicolon-pos+1, QChar(code));
         }
-
-        metaDataImpl()->setPreview(markup.simplified().left(maxPreviewLength));
     }
-    
+#ifdef USE_HTML_PARSER
+    metaDataImpl()->setPreview(htmlToPlainText(plainText).left(maxPreviewLength));
+#else
+    metaDataImpl()->setPreview(plainText.left(maxPreviewLength));
+#endif
     partContainerImpl()->setPreviewDirty(false);
 }
+
+#ifdef USE_HTML_PARSER
+QString QMailMessage::htmlToPlainText(const QString &html)
+{
+    QTextDocument doc;
+    doc.setHtml(html);
+    // Parse text a second time to prevent html injection via pre-hidden tags(e.g: &lt; img src="cenas.png" &gt;)
+    doc.setHtml(doc.toPlainText());
+    return doc.toPlainText();
+}
+#endif
 
 /*! \internal */
 QMailMessage QMailMessage::fromRfc2822(LongString& ls)

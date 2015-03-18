@@ -17,6 +17,11 @@ win32: {
 }
 
 QT = core sql network
+
+contains(DEFINES, USE_HTML_PARSER) {
+    QT += gui
+}
+
 DEPENDPATH += .
 INCLUDEPATH += support
 
