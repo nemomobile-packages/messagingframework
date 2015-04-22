@@ -907,6 +907,7 @@ const static char* imageContentType = "image";
 const static char* textContentType = "text";
 const static char* plainContentSubtype = "plain";
 const static char* htmlContentSubtype = "html";
+const static char* calendarContentSubtype = "calendar";
 
 namespace findBody
 {
@@ -5111,6 +5112,24 @@ QMailMessagePartContainer* QMailMessagePartContainer::findHtmlContainer() const
     QMailMessagePartContainer* result;
     findBody::Context ctx;
     ctx.contentSubtype = htmlContentSubtype;
+
+    if (findBody::inPartContainer(*this, ctx)) {
+        result = ctx.found;
+    } else {
+        result = 0;
+    }
+    return result;
+}
+
+/*!
+  Searches for the container that encapsulates the calendar invitation, returning a pointer to it or 0 if it's not present.
+ */
+QMailMessagePartContainer* QMailMessagePartContainer::findCalendarInvitationLocation() const
+{
+    QMailMessagePartContainer* result;
+    findBody::Context ctx;
+
+    ctx.contentSubtype = calendarContentSubtype;
 
     if (findBody::inPartContainer(*this, ctx)) {
         result = ctx.found;

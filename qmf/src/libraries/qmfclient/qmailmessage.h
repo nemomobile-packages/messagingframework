@@ -384,6 +384,7 @@ public:
 
     QMailMessagePartContainer* findPlainTextContainer() const;
     QMailMessagePartContainer* findHtmlContainer() const;
+    QMailMessagePartContainer* findCalendarInvitationLocation() const;
     QList<QMailMessagePartContainer::Location> findAttachmentLocations() const;
     QList<QMailMessagePartContainer::Location> findInlineImageLocations() const;
     QList<QMailMessagePartContainer::Location> findInlinePartLocations() const;
