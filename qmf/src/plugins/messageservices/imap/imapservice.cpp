@@ -1936,7 +1936,7 @@ void ImapService::onOnlineStateChanged(bool isOnline)
     qMailLog(Messaging) << "IDLE Session: Network state changed: " << isOnline;
     if (accountPushEnabled() && isOnline && (!_networkSession || _networkSession->state() != QNetworkSession::Connected)) {
         openIdleSession();
-    } else  if (!isOnline) {
+    } else if (!isOnline) {
         onSessionError(QNetworkSession::InvalidConfigurationError);
         closeIdleSession();
     }
