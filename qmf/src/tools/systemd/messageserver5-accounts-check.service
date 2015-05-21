@@ -1,5 +1,7 @@
 [Unit]
 Description=check accounts for messageserver5
+After=oneshot-user.service
+After=jolla-settings-accounts-update.service
 Before=messageserver5.service
 
 [Service]
