@@ -1,3 +1,0 @@
-[submodule "upstream"]
-	path = upstream
-	url = https://code.qt.io/git/qt-labs/messagingframework.git
